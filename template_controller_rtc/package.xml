@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>template_controller_rtc</name>
+  <version>0.0.0</version>
+  <description>The template_controller_rtc package </description>
+
+  <maintainer email="t-hiraoka@jsk.imi.i.u-tokyo.ac.jp">Takuma-Hiraoka</maintainer>
+
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>rtmbuild</depend>
+  <depend>template_controller_msgs</depend>
+
+</package>
