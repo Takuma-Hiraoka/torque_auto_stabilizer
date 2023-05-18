@@ -1,5 +1,5 @@
-#ifndef TemplateController_H
-#define TemplateController_H
+#ifndef TorqueAutoStabilizer_H
+#define TorqueAutoStabilizer_H
 
 #include <rtm/Manager.h>
 #include <rtm/DataFlowComponentBase.h>
@@ -8,11 +8,11 @@
 #include <rtm/CorbaPort.h>
 #include <rtm/idl/BasicDataType.hh>
 
-#include <template_controller_msgs/idl/TemplateController.hh>
+#include <torque_auto_stabilizer_msgs/idl/TorqueAutoStabilizer.hh>
 
-#include "TemplateControllerService_impl.h"
+#include "TorqueAutoStabilizerService_impl.h"
 
-class TemplateController : public RTC::DataFlowComponentBase{
+class TorqueAutoStabilizer : public RTC::DataFlowComponentBase{
 protected:
 
   RTC::TimedDoubleSeq m_qRef_;
@@ -30,22 +30,22 @@ protected:
   RTC::TimedDoubleSeq m_tau_;
   RTC::OutPort<RTC::TimedDoubleSeq> m_tauOut_;
 
-  TemplateControllerService_impl m_service0_;
-  RTC::CorbaPort m_templateControllerServicePort_;
+  TorqueAutoStabilizerService_impl m_service0_;
+  RTC::CorbaPort m_torqueAutoStabilizerServicePort_;
 
 public:
-  TemplateController(RTC::Manager* manager);
+  TorqueAutoStabilizer(RTC::Manager* manager);
   virtual RTC::ReturnCode_t onInitialize();
   virtual RTC::ReturnCode_t onExecute(RTC::UniqueId ec_id);
 
-  bool templateParam(const double data);
+  bool torqueAutoStabilizerParam(const double data);
 
 private:
 };
 
 extern "C"
 {
-  void TemplateControllerInit(RTC::Manager* manager);
+  void TorqueAutoStabilizerInit(RTC::Manager* manager);
 }
 
-#endif // TemplateController_H
+#endif // TorqueAutoStabilizer_H

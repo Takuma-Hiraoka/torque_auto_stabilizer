@@ -1,0 +1,12 @@
+#ifndef TorqueAutoStabilizer_idl
+#define TorqueAutoStabilizer_idl
+
+module torque_auto_stabilizer_msgs
+{
+  struct TemplateDataIdl
+  {
+    double data;
+  };
+};
+
+#endif

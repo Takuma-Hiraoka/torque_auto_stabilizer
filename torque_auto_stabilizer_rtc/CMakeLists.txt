@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(template_controller_rtc)
+project(torque_auto_stabilizer_rtc)
 
 add_compile_options(-std=c++14)
 set(CMAKE_BUILD_TYPE Release)
@@ -13,7 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
 rtmbuild_init()
 
 catkin_package(
-  LIBRARIES TemplateControllerServiceSkel TemplateControllerServiceStub
+  LIBRARIES TorqueAutoStabilizerServiceSkel TorqueAutoStabilizerServiceStub
   )
 
 # generate idl

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(template_controller_msgs)
+project(torque_auto_stabilizer_msgs)
 
 # add_compile_options(-std=c++11)
 # set(CMAKE_BUILD_TYPE Release)
@@ -15,7 +15,6 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  TemplateData.msg
  )
 
 ## Generate services in the 'srv' folder
@@ -38,7 +37,7 @@ rtmbuild2_init() # ここにidlとmsgが依存する外部パッケージを書�
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-   LIBRARIES TemplateControllerSkel TemplateControllerStub
+   LIBRARIES TorqueAutoStabilizerSkel TorqueAutoStabilizerStub
 #   DEPENDS openrtm_aist
 )
 

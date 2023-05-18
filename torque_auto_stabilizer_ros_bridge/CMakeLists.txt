@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(template_controller_ros_bridge)
+project(torque_auto_stabilizer_ros_bridge)
 
 add_compile_options(-std=c++11)
 set(CMAKE_BUILD_TYPE Release)

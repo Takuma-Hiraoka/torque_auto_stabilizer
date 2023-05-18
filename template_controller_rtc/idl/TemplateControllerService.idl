@@ -1,9 +1,0 @@
-#include "BasicDataType.idl"
-
-module template_controller_rtc
-{
-  interface TemplateControllerService
-  {
-    boolean templateParam(in double data);
-  };
-};

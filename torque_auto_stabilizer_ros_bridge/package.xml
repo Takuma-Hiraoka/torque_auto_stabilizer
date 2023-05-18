@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>template_controller_ros_bridge</name>
+  <name>torque_auto_stabilizer_ros_bridge</name>
   <version>0.0.0</version>
-  <description>The template_controller_ros_bridge package</description>
+  <description>The torque_auto_stabilizer_ros_bridge package</description>
 
   <maintainer email="t-hiraoka@jsk.imi.i.u-tokyo.ac.jp">Takuma-Hiraoka</maintainer>
 
@@ -11,7 +11,7 @@
   <author email="t-hiraoka@jsk.imi.i.u-tokyo.ac.jp">Takuma-Hiraoka</author>
 
   <buildtool_depend>catkin</buildtool_depend>
-  <depend>template_controller_msgs</depend>
+  <depend>torque_auto_stabilizer_msgs</depend>
   <depend>roscpp</depend>
 
 </package>

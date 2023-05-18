@@ -1,0 +1,9 @@
+#include "BasicDataType.idl"
+
+module torque_auto_stabilizer_rtc
+{
+  interface TorqueAutoStabilizerService
+  {
+    boolean torqueAutoStabilizerParam(in double data);
+  };
+};

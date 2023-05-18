@@ -1,1 +1,1 @@
-# template_controller_rtc
+# torque_auto_stabilizer_rtc

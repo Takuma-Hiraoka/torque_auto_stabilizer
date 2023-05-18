@@ -1,13 +1,13 @@
 #include <rtm/Manager.h>
-#include "TemplateController.h"
+#include "TorqueAutoStabilizerROSBridge.h"
 
 void MyModuleInit(RTC::Manager* manager)
 {
-  TemplateControllerInit(manager);
+  TorqueAutoStabilizerROSBridgeInit(manager);
   RTC::RtcBase* comp;
 
   // Create a component
-  comp = manager->createComponent("TemplateController"); // skip root name space for OpenRTM instance name
+  comp = manager->createComponent(("TorqueAutoStabilizerROSBridge?instance_name="+ros::this_node::getName().substr(1)).c_str()); // skip root name space for OpenRTM instance name
 
   return;
 
@@ -17,6 +17,7 @@ int main (int argc, char** argv)
 {
   RTC::Manager* manager;
   manager = RTC::Manager::init(argc, argv);
+  ros::init(argc, argv, "TorqueAutoStabilizerROSBridge", ros::init_options::NoSigintHandler);
 
   // Initialize manager
   manager->init(argc, argv);
