@@ -1,4 +1,5 @@
 #include "TorqueAutoStabilizer.h"
+#include "pinocchio/parsers/urdf.hpp"
 
 TorqueAutoStabilizer::TorqueAutoStabilizer(RTC::Manager* manager):
   RTC::DataFlowComponentBase(manager),
@@ -24,6 +25,32 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
   addOutPort("tauOut", this->m_tauOut_);
   this->m_torqueAutoStabilizerServicePort_.registerProvider("service0", "TorqueAutoStabilizerService", this->m_service0_);
   addPort(this->m_torqueAutoStabilizerServicePort_);
+
+  {
+    // load dt
+    std::string buf; this->getProperty("dt", buf);
+    this->dt_ = std::stod(buf);
+    if(this->dt_ <= 0.0){
+      this->getProperty("exec_cxt.periodic.rate", buf);
+      double rate = std::stod(buf);
+      if(rate > 0.0){
+        this->dt_ = 1.0/rate;
+      }else{
+        std::cerr << "\x1b[31m[" << this->m_profile.instance_name << "] " << "dt is invalid" << "\x1b[39m" << std::endl;
+        return RTC::RTC_ERROR;
+      }
+    }
+  }
+
+  {
+    // load robot model
+    std::string fileName;
+    this->getProperty("urdf_model", fileName);
+    if (fileName.find("file://") == 0) fileName.erase(0, strlen("file://"));
+    pinocchio::Model model;
+    pinocchio::urdf::buildModel(fileName,model);
+    std::cout << "model name: " << model.name << std::endl;
+  }
 
   return RTC::RTC_OK;
 }
@@ -83,6 +110,18 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onDeactivated(RTC::UniqueId ec_id){
 }
 
 bool TorqueAutoStabilizer::torqueAutoStabilizerParam(const double data){
+}
+
+bool TorqueAutoStabilizer::getProperty(const std::string& key, std::string& ret) {
+  if (this->getProperties().hasKey(key.c_str())) {
+    ret = std::string(this->getProperties()[key.c_str()]);
+  } else if (this->m_pManager->getConfig().hasKey(key.c_str())) { // 引数 -o で与えたプロパティを捕捉
+    ret = std::string(this->m_pManager->getConfig()[key.c_str()]);
+  } else {
+    return false;
+  }
+  std::cerr << "[" << this->m_profile.instance_name << "] " << key << ": " << ret <<std::endl;
+  return true;
 }
 
 static const char* TorqueAutoStabilizer_spec[] = {

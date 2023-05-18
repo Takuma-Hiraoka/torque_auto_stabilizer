@@ -8,12 +8,15 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   )
 
+find_package(pinocchio REQUIRED)
+
 rtmbuild_add_library(TorqueAutoStabilizer SHARED
   TorqueAutoStabilizer.cpp
   TorqueAutoStabilizerService_impl.cpp
   )
 target_link_libraries(TorqueAutoStabilizer
   ${catkin_LIBRARIES}
+  pinocchio::pinocchio
   )
 set_target_properties(TorqueAutoStabilizer PROPERTIES PREFIX "") # libTorqueAutoStabilizer.so -> TorqueAutoStabilizer.so
 add_dependencies(TorqueAutoStabilizer RTMBUILD_${PROJECT_NAME}_genrpc) # wait for rtmbuild_genidl

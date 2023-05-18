@@ -35,7 +35,6 @@ protected:
   TorqueAutoStabilizerService_impl m_service0_;
   RTC::CorbaPort m_torqueAutoStabilizerServicePort_;
 
-  std::mutex mutex_;
 public:
   TorqueAutoStabilizer(RTC::Manager* manager);
   virtual RTC::ReturnCode_t onInitialize();
@@ -46,6 +45,10 @@ public:
   bool torqueAutoStabilizerParam(const double data);
 
 private:
+protected:
+  double dt_;
+  std::mutex mutex_;
+  bool getProperty(const std::string& key, std::string& ret);
 };
 
 extern "C"

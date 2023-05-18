@@ -12,5 +12,6 @@
 
   <depend>rtmbuild</depend>
   <depend>torque_auto_stabilizer_msgs</depend>
+  <depend>pinocchio</depend>
 
 </package>
