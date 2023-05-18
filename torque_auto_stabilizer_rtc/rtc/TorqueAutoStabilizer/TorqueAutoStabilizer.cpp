@@ -29,7 +29,6 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
 }
 
 RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
-  std::cerr << "TorqueAutoStabilizer rtc onExecute" << std::endl;
 
   if (this->m_qRefIn_.isNew()){
     this->m_qRefIn_.read();
@@ -69,6 +68,17 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
     this->m_tauOut_.write();
   }
 
+  return RTC::RTC_OK;
+}
+
+RTC::ReturnCode_t TorqueAutoStabilizer::onActivated(RTC::UniqueId ec_id){
+  std::lock_guard<std::mutex> guard(this->mutex_);
+  std::cerr << "[" << m_profile.instance_name << "] "<< "onActivated(" << ec_id << ")" << std::endl;
+  return RTC::RTC_OK;
+}
+RTC::ReturnCode_t TorqueAutoStabilizer::onDeactivated(RTC::UniqueId ec_id){
+  std::lock_guard<std::mutex> guard(this->mutex_);
+  std::cerr << "[" << m_profile.instance_name << "] "<< "onDeactivated(" << ec_id << ")" << std::endl;
   return RTC::RTC_OK;
 }
 

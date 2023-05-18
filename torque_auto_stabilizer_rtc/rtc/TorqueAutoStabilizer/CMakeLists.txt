@@ -20,3 +20,9 @@ add_dependencies(TorqueAutoStabilizer RTMBUILD_${PROJECT_NAME}_genrpc) # wait fo
 
 rtmbuild_add_executable(TorqueAutoStabilizerComp TorqueAutoStabilizerComp.cpp)
 target_link_libraries(TorqueAutoStabilizerComp TorqueAutoStabilizer)
+
+install(TARGETS TorqueAutoStabilizer
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
+)
