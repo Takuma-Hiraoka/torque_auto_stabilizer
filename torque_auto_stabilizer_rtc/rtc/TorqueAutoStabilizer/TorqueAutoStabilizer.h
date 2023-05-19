@@ -12,7 +12,10 @@
 
 #include <torque_auto_stabilizer_msgs/idl/TorqueAutoStabilizer.hh>
 
+#include "pinocchio/algorithm/joint-configuration.hpp"
+#include "pinocchio/algorithm/kinematics.hpp"
 #include "TorqueAutoStabilizerService_impl.h"
+#include "GaitParam.h"
 
 class TorqueAutoStabilizer : public RTC::DataFlowComponentBase{
 protected:
@@ -45,6 +48,9 @@ public:
   bool torqueAutoStabilizerParam(const double data);
 
 private:
+  pinocchio::Model model_;
+  GaitParam gaitParam_;
+  
 protected:
   double dt_;
   std::mutex mutex_;
