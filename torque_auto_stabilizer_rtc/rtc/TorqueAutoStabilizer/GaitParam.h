@@ -6,7 +6,7 @@
 #include "pinocchio/algorithm/kinematics.hpp"
 
 class GaitParam {
-  // pinocchioのdataにおいてnjointsは(floating_base, urdfのjoint)だが、qは(urdfのjoint)なので注意．
+  // pinocchioのdataにおいてnjointsは(floating_base, urdfのjoint)だが、nqは(urdfのjoint)なので注意．
   // data portとのやり取り時及びcout時にtableをみて直す。
 private:
   // parametor
@@ -24,9 +24,8 @@ private:
   pinocchio::Data genRobotTqc;
 public:
   void init(const pinocchio::Model& model){
-    jointControllable.resize(model.njoints-1, true);
-    std::cerr << "njoints : " << model.njoints;
-    Eigen::VectorXd q = Eigen::VectorXd::Zero(model.njoints-1);
+    jointControllable.resize(model.nq, true);
+    Eigen::VectorXd q = Eigen::VectorXd::Zero(model.nq);
     pinocchio::Data data(model);
     refRobotRaw = data;
     pinocchio::forwardKinematics(model,refRobotRaw,q);
