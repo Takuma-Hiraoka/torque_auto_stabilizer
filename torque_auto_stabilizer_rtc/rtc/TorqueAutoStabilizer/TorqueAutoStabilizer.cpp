@@ -47,7 +47,7 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
     std::string fileName;
     this->getProperty("urdf_model", fileName);
     if (fileName.find("file://") == 0) fileName.erase(0, strlen("file://"));
-    pinocchio::urdf::buildModel(fileName,this->model_,true);
+    pinocchio::urdf::buildModel(fileName,pinocchio::JointModelFreeFlyer(),this->model_,true);
     std::cout << "model name: " << this->model_.name << std::endl;
     this->gaitParam_.init(this->model_);
   }
