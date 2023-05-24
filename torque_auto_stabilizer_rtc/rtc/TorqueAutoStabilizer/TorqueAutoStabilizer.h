@@ -2,6 +2,7 @@
 #define TorqueAutoStabilizer_H
 
 #include <mutex>
+#include <vector>
 
 #include <rtm/Manager.h>
 #include <rtm/DataFlowComponentBase.h>
@@ -49,12 +50,15 @@ public:
 
 private:
   pinocchio::Model model_;
+  std::vector<int> joint_id_table_;
   GaitParam gaitParam_;
   
 protected:
   double dt_;
   std::mutex mutex_;
   bool getProperty(const std::string& key, std::string& ret);
+  bool readInPortData(Eigen::VectorXd& refRobotData, Eigen::VectorXd& actRobotData);
+  bool writeOutPortData(const GaitParam & gaitParam);
 };
 
 extern "C"

@@ -1,5 +1,7 @@
 #include "TorqueAutoStabilizer.h"
 #include "pinocchio/parsers/urdf.hpp"
+#include <fstream>
+#include <sstream>
 
 TorqueAutoStabilizer::TorqueAutoStabilizer(RTC::Manager* manager):
   RTC::DataFlowComponentBase(manager),
@@ -48,17 +50,58 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
     this->getProperty("urdf_model", fileName);
     if (fileName.find("file://") == 0) fileName.erase(0, strlen("file://"));
     pinocchio::urdf::buildModel(fileName,pinocchio::JointModelFreeFlyer(),this->model_,true);
-    std::cout << "model name: " << this->model_.name << std::endl;
+    std::cerr << "model name: " << this->model_.name << std::endl;
     this->gaitParam_.init(this->model_);
+  }
+
+  {
+    // load joint id table
+    std::string fileName;
+    this->getProperty("joint_id_table", fileName);
+    if (fileName.find("file://") == 0) fileName.erase(0, strlen("file://"));
+    std::fstream id_table;
+    id_table.open(fileName);
+    this->joint_id_table_.resize(this->model_.nv -6);
+
+    if (id_table.is_open()) {
+      double tmp;
+      int i = 0;
+      for (; i < this->model_.nv -6; i++) { // jointの数だけ
+
+      retry:
+        {
+          std::string str;
+          if (std::getline(id_table, str)) {
+            if (str.empty())   goto retry;
+            if (str[0] == '#') goto retry;
+
+            std::istringstream sstrm(str);
+            sstrm >> tmp; // RobotHardware joint id. iと同じ
+            if(sstrm.eof()) goto next;
+            sstrm >> tmp;
+            joint_id_table_[i] = tmp;
+          } else {
+            i--;
+            break;
+          }
+        }
+
+      next:
+        std::cerr << "RobotHardware joint: " << i << " pinocchio joint_id: " << joint_id_table_[i] << std::endl;
+      }
+      id_table.close();
+    }
   }
 
   return RTC::RTC_OK;
 }
 
-RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
-
+bool TorqueAutoStabilizer::readInPortData(Eigen::VectorXd& refRobotData, Eigen::VectorXd& actRobotData){
   if (this->m_qRefIn_.isNew()){
     this->m_qRefIn_.read();
+    for(int i=0;i<this->m_qRef_.data.length();i++){
+      refRobotData[7+this->joint_id_table_[i]] = m_qRef_.data[i];
+    }
   }
 
   if (this->m_tauRefIn_.isNew()){
@@ -76,12 +119,15 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
   if (this->m_tauActIn_.isNew()){
     this->m_tauActIn_.read();
   }
+}
+
+bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
 
   {
     m_q_.tm = m_qRef_.tm;
     m_q_.data.length(m_qRef_.data.length());
     for (int i = 0 ; i < m_q_.data.length(); i++){
-      m_q_.data[i] = m_qRef_.data[i];
+      m_q_.data[i] = gaitParam.refRobotData[7+this->joint_id_table_[i]];
     }
     this->m_qOut_.write();
   }
@@ -95,6 +141,11 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
     this->m_tauOut_.write();
   }
 
+}
+
+RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
+  this->readInPortData(this->gaitParam_.refRobotData,this->gaitParam_.actRobotData);
+  this->writeOutPortData(this->gaitParam_);
   return RTC::RTC_OK;
 }
 
