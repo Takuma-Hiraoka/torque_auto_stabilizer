@@ -13,8 +13,9 @@ private:
   std::vector<bool> jointControllable; // 要素数はnq-7. 順序はurdf準拠．falseの場合、qやtauはrefの値をそのまま出力する(writeOutputPort時にref値で上書き). 指を位置制御にするため．
   // from data port
 public:
-  Eigen::VectorXd refRobotData; // 要素数nq.
-  Eigen::VectorXd actRobotData; // 要素数nq.
+  Eigen::VectorXd refRobotPos; // 要素数nq.
+  Eigen::VectorXd actRobotPos; // 要素数nq.
+  Eigen::VectorXd actRobotVel; // 要素数nv.
 
   // refToGenFrameConverter
   pinocchio::Data refRobot;
@@ -31,8 +32,9 @@ public:
     std::cerr << "model.nq : " << model.nq << std::endl;
     std::cerr << "model.nv : " << model.nv << std::endl;
     pinocchio::Data data(model);
-    refRobotData = Eigen::VectorXd::Zero(model.nq);
-    actRobotData  = Eigen::VectorXd::Zero(model.nq);
+    refRobotPos = Eigen::VectorXd::Zero(model.nq);
+    actRobotPos  = Eigen::VectorXd::Zero(model.nq);
+    actRobotVel  = Eigen::VectorXd::Zero(model.nv);
     refRobot = data;
     pinocchio::forwardKinematics(model,refRobot,q);
     actRobot = data;

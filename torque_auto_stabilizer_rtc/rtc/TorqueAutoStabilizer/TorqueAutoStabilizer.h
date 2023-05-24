@@ -57,7 +57,7 @@ protected:
   double dt_;
   std::mutex mutex_;
   bool getProperty(const std::string& key, std::string& ret);
-  bool readInPortData(Eigen::VectorXd& refRobotData, Eigen::VectorXd& actRobotData);
+  bool readInPortData(Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel);
   bool writeOutPortData(const GaitParam & gaitParam);
 };
 

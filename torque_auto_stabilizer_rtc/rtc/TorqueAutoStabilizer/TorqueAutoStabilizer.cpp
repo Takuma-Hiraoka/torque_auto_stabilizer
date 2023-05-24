@@ -96,24 +96,30 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
   return RTC::RTC_OK;
 }
 
-bool TorqueAutoStabilizer::readInPortData(Eigen::VectorXd& refRobotData, Eigen::VectorXd& actRobotData){
+bool TorqueAutoStabilizer::readInPortData(Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel){
   if (this->m_qRefIn_.isNew()){
     this->m_qRefIn_.read();
     for(int i=0;i<this->m_qRef_.data.length();i++){
-      refRobotData[7+this->joint_id_table_[i]] = m_qRef_.data[i];
+      refRobotPos[7+this->joint_id_table_[i]] = m_qRef_.data[i];
     }
   }
 
   if (this->m_tauRefIn_.isNew()){
-    this->m_tauRefIn_.read();
+    this->m_tauRefIn_.read(); //TODO
   }
 
   if (this->m_qActIn_.isNew()){
     this->m_qActIn_.read();
+    for(int i=0;i<this->m_qAct_.data.length();i++){
+      actRobotPos[7+this->joint_id_table_[i]] = m_qAct_.data[i];
+    }
   }
 
   if (this->m_dqActIn_.isNew()){
     this->m_dqActIn_.read();
+    for(int i=0;i<this->m_dqAct_.data.length();i++){
+      actRobotVel[6+this->joint_id_table_[i]] = m_dqAct_.data[i];
+    }
   }
 
   if (this->m_tauActIn_.isNew()){
@@ -127,7 +133,7 @@ bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
     m_q_.tm = m_qRef_.tm;
     m_q_.data.length(m_qRef_.data.length());
     for (int i = 0 ; i < m_q_.data.length(); i++){
-      m_q_.data[i] = gaitParam.refRobotData[7+this->joint_id_table_[i]];
+      m_q_.data[i] = gaitParam.refRobotPos[7+this->joint_id_table_[i]];
     }
     this->m_qOut_.write();
   }
@@ -144,7 +150,7 @@ bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
 }
 
 RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
-  this->readInPortData(this->gaitParam_.refRobotData,this->gaitParam_.actRobotData);
+  this->readInPortData(this->gaitParam_.refRobotPos, this->gaitParam_.actRobotPos, this->gaitParam_.actRobotVel);
   this->writeOutPortData(this->gaitParam_);
   return RTC::RTC_OK;
 }
