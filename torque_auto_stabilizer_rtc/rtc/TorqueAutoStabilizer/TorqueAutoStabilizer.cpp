@@ -7,6 +7,8 @@ TorqueAutoStabilizer::TorqueAutoStabilizer(RTC::Manager* manager):
   RTC::DataFlowComponentBase(manager),
   m_qRefIn_("qRefIn", m_qRef_),
   m_tauRefIn_("tauRefIn", m_tauRef_),
+  m_refBasePosIn_("refBasePosIn", m_refBasePos_),
+  m_refBaseRpyIn_("refBaseRpyIn", m_refBaseRpy_),
   m_qActIn_("qActIn", m_qAct_),
   m_dqActIn_("dqActIn", m_dqAct_),
   m_tauActIn_("tauActIn", m_tauAct_),
@@ -20,6 +22,8 @@ TorqueAutoStabilizer::TorqueAutoStabilizer(RTC::Manager* manager):
 RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
   addInPort("qRefIn", this->m_qRefIn_);
   addInPort("tauRefIn", this->m_tauRefIn_);
+  addInPort("refBasePosIn", this->m_refBasePosIn_);
+  addInPort("refBaseRpyIn", this->m_refBaseRpyIn_);
   addInPort("qActIn", this->m_qActIn_);
   addInPort("dqActIn", this->m_dqActIn_);
   addInPort("tauActIn", this->m_tauActIn_);
@@ -106,6 +110,24 @@ bool TorqueAutoStabilizer::readInPortData(Eigen::VectorXd& refRobotPos, Eigen::V
 
   if (this->m_tauRefIn_.isNew()){
     this->m_tauRefIn_.read(); //TODO
+  }
+
+  if(this->m_refBasePosIn_.isNew()){
+    this->m_refBasePosIn_.read();
+    refRobotPos[0] = this->m_refBasePos_.data.x;
+    refRobotPos[1] = this->m_refBasePos_.data.y;
+    refRobotPos[2] = this->m_refBasePos_.data.z;
+  }
+  if(this->m_refBaseRpyIn_.isNew()){
+    this->m_refBaseRpyIn_.read();
+    Eigen::Quaterniond q;
+    q = Eigen::AngleAxisd(this->m_refBaseRpy_.data.r, Eigen::Vector3d::UnitX())
+        * Eigen::AngleAxisd(this->m_refBaseRpy_.data.p, Eigen::Vector3d::UnitY())
+        * Eigen::AngleAxisd(this->m_refBaseRpy_.data.y, Eigen::Vector3d::UnitZ());
+    refRobotPos[3] = q.coeffs()[0];
+    refRobotPos[4] = q.coeffs()[1];
+    refRobotPos[5] = q.coeffs()[2];
+    refRobotPos[6] = q.coeffs()[3];
   }
 
   if (this->m_qActIn_.isNew()){

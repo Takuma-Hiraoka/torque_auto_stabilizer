@@ -10,6 +10,7 @@
 #include <rtm/DataInPort.h>
 #include <rtm/CorbaPort.h>
 #include <rtm/idl/BasicDataType.hh>
+#include <rtm/idl/ExtendedDataTypes.hh>
 
 #include <torque_auto_stabilizer_msgs/idl/TorqueAutoStabilizer.hh>
 
@@ -25,6 +26,10 @@ protected:
   RTC::InPort<RTC::TimedDoubleSeq> m_qRefIn_;
   RTC::TimedDoubleSeq m_tauRef_;
   RTC::InPort<RTC::TimedDoubleSeq> m_tauRefIn_;
+  RTC::TimedPoint3D m_refBasePos_; // Reference World frame
+  RTC::InPort<RTC::TimedPoint3D> m_refBasePosIn_;
+  RTC::TimedOrientation3D m_refBaseRpy_; // Reference World frame
+  RTC::InPort<RTC::TimedOrientation3D> m_refBaseRpyIn_;
   RTC::TimedDoubleSeq m_qAct_;
   RTC::InPort<RTC::TimedDoubleSeq> m_qActIn_;
   RTC::TimedDoubleSeq m_dqAct_;
