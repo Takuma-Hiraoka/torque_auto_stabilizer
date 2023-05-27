@@ -1,67 +1,56 @@
 #ifndef MathUtil_H
 #define MathUtil_H
 #include <cmath>
-#include "pinocchio/math/fwd.hpp"
 
-namespace MathUtil
+namespace mathutil
 {
-  const double PI = pinocchio::PI<double>();
   // copy from choreonoid
-  Eigen::Matrix3d rotFromRpy(double r, double p, double y)
+  Eigen::Matrix3d rotFromRpy(double r, double p, double y);
+
+  Eigen::Vector3d rpyFromRot(const Eigen::Matrix3d& R);
+
+  Eigen::Matrix3d orientCoordToAxis(const Eigen::Matrix3d& m, const Eigen::Vector3d& axis, const Eigen::Vector3d& localaxis = Eigen::Vector3d::UnitZ());
+  Eigen::Transform<double, 3, Eigen::AffineCompact> orientCoordToAxis(const Eigen::Transform<double, 3, Eigen::AffineCompact>& m, const Eigen::Vector3d& axis, const Eigen::Vector3d& localaxis = Eigen::Vector3d::UnitZ());
+  Eigen::AngleAxisd slerp(const Eigen::AngleAxisd& M1, const Eigen::AngleAxisd& M2, double r);
+
+  Eigen::Transform<double, 3, Eigen::AffineCompact> calcMidCoords(const std::vector<Eigen::Transform<double, 3, Eigen::AffineCompact>>& coords, const std::vector<double>& weights);
+
+  // copy from https://github.com/Naoki-Hiraoka/cpp_filters/blob/master/include/cpp_filters/FirstOrderLowPassFilter.h
+  template <class T> class FirstOrderLowPassFilter
   {
-    const double cr = std::cos(r);
-    const double sr = std::sin(r);
-    const double cp = std::cos(p);
-    const double sp = std::sin(p);
-    const double cy = std::cos(y);
-    const double sy = std::sin(y);
-
-    Eigen::Matrix3d R;
-    R << cp*cy, sr*sp*cy - cr*sy, cr*sp*cy + sr*sy,
-      cp*sy, sr*sp*sy + cr*cy, cr*sp*sy - sr*cy,
-      -sp  , sr*cp           , cr*cp;
-
-    return R;
-  }
-
-
-  Eigen::Vector3d rpyFromRot(const Eigen::Matrix3d& R)
-  {
-    double roll, pitch, yaw;
-
-    if((std::fabs(R(0,0)) < std::fabs(R(2,0))) && (std::fabs(R(1,0)) < std::fabs(R(2,0)))) {
-      // std::cos(p) is nearly = 0
-      double sp = -R(2,0);
-      if (sp < -1.0) {
-        sp = -1.0;
-      } else if (sp > 1.0) {
-        sp = 1.0;
+  private:
+    T prev_value;
+    double cutoff_freq, dt, const_param;
+  public:
+    FirstOrderLowPassFilter (const double _cutoff_freq, const T init_value) : FirstOrderLowPassFilter(_cutoff_freq, 1.0, init_value)
+    {
+    };
+    FirstOrderLowPassFilter (const double _cutoff_freq, const double _dt, const T init_value) : prev_value(init_value), dt(_dt)
+    {
+      setCutOffFreq(_cutoff_freq);
+    };
+    T passFilter (const T& value, const double _dt)
+    {
+      if ( _dt != dt ){
+        dt = _dt;
+        setCutOffFreq(cutoff_freq);
       }
-      pitch = std::asin(sp); // -pi/2< p < pi/2
-
-      roll = std::atan2(sp * R(0,1) + R(1,2),  // -cp*cp*sr*cy
-                        sp * R(0,2) - R(1,1)); // -cp*cp*cr*cy
-
-      if (R(0,0) > 0.0) { // cy > 0
-        (roll < 0.0) ? (roll += PI) : (roll -= PI);
-      }
-      const double sr = std::sin(roll);
-      const double cr = std::cos(roll);
-      if(sp > 0.0){
-        yaw = std::atan2(sr * R(1,1) + cr * R(1,2), //sy*sp
-                         sr * R(0,1) + cr * R(0,2));//cy*sp
-      } else {
-        yaw = std::atan2(-sr * R(1,1) - cr * R(1,2),
-                         -sr * R(0,1) - cr * R(0,2));
-      }
-    } else {
-      yaw = std::atan2(R(1,0), R(0,0));
-      const double sa = std::sin(yaw);
-      const double ca = std::cos(yaw);
-      pitch = std::atan2(-R(2,0), ca * R(0,0) + sa * R(1,0));
-      roll = std::atan2(sa * R(0,2) - ca * R(1,2), -sa * R(0,1) + ca * R(1,1));
-    }
-    return Eigen::Vector3d(roll, pitch, yaw);
-  }
+      prev_value = 1.0/(1+const_param) * prev_value + const_param/(1+const_param) * value;
+      return prev_value;
+    };
+    T passFilter (const T& value)
+    {
+      prev_value = 1.0/(1+const_param) * prev_value + const_param/(1+const_param) * value;
+      return prev_value;
+    };
+    void reset (const T& value) { prev_value = value; };
+    void setCutOffFreq (const double f)
+    {
+      cutoff_freq = f;
+      const_param = 2 * M_PI * cutoff_freq * dt;
+    };
+    double getCutOffFreq () const { return cutoff_freq; };
+    T value () const { return prev_value; };
+  };
 }
 #endif // MathUtil_H

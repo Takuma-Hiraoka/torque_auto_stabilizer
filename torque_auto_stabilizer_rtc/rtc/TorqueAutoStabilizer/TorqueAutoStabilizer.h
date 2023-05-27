@@ -18,6 +18,7 @@
 #include "pinocchio/algorithm/kinematics.hpp"
 #include "TorqueAutoStabilizerService_impl.h"
 #include "GaitParam.h"
+#include "ActToGenFrameConverter.h"
 
 class TorqueAutoStabilizer : public RTC::DataFlowComponentBase{
 protected:
@@ -61,13 +62,13 @@ private:
   pinocchio::Model model_;
   std::vector<int> joint_id_table_;
   GaitParam gaitParam_;
-  
+  ActToGenFrameConverter actToGenFrameConverter_;
 protected:
   double dt_;
   std::mutex mutex_;
   bool getProperty(const std::string& key, std::string& ret);
   bool readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel);
-  static bool execAutoStabilizer(GaitParam& gaitParam, double dt);
+  static bool execAutoStabilizer(GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter);
   bool writeOutPortData(const GaitParam & gaitParam);
   class ControlMode{
   public:

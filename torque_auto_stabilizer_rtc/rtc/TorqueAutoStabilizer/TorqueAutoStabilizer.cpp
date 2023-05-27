@@ -241,10 +241,7 @@ bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pino
     q = Eigen::AngleAxisd(this->m_refBaseRpy_.data.r, Eigen::Vector3d::UnitX())
         * Eigen::AngleAxisd(this->m_refBaseRpy_.data.p, Eigen::Vector3d::UnitY())
         * Eigen::AngleAxisd(this->m_refBaseRpy_.data.y, Eigen::Vector3d::UnitZ());
-    refRobotPos[3] = q.coeffs()[0];
-    refRobotPos[4] = q.coeffs()[1];
-    refRobotPos[5] = q.coeffs()[2];
-    refRobotPos[6] = q.coeffs()[3];
+    refRobotPos.segment(3,4) = q.coeffs();
   }
 
   if (this->m_qActIn_.isNew()){
@@ -265,12 +262,9 @@ bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pino
     this->m_actImuIn_.read();
     pinocchio::SE3 imuParent = gaitParam.actRobot.oMi[model.getJointId(gaitParam.imuParentLink)];
     Eigen::Matrix3d imuR = imuParent.rotation() * gaitParam.imuLocalT.rotation();
-    Eigen::Matrix3d actR = MathUtil::rotFromRpy(this->m_actImu_.data.r, this->m_actImu_.data.p, this->m_actImu_.data.y);
+    Eigen::Matrix3d actR = mathutil::rotFromRpy(this->m_actImu_.data.r, this->m_actImu_.data.p, this->m_actImu_.data.y);
     Eigen::Quaterniond q = Eigen::AngleAxisd(actR) * Eigen::AngleAxisd(imuR.transpose() * gaitParam.actRobot.oMi[model.getJointId("root_joint")].rotation());// 単純に3x3行列の空間でRを積算していると、だんだん数値誤差によって回転行列でなくなってしまう恐れがあるので念の為
-    actRobotPos[3] = q.coeffs()[0];
-    actRobotPos[4] = q.coeffs()[1];
-    actRobotPos[5] = q.coeffs()[2];
-    actRobotPos[6] = q.coeffs()[3];
+    actRobotPos.segment(3,4) = q.coeffs();
   }
 
   if (this->m_tauActIn_.isNew()){
@@ -278,7 +272,10 @@ bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pino
   }
 }
 
-bool TorqueAutoStabilizer::execAutoStabilizer(GaitParam& gaitParam, double dt) {
+bool TorqueAutoStabilizer::execAutoStabilizer(GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter) {
+  // FootOrigin座標系を用いてactRobotRawをgenerate frameに投影しactRobotとする
+  actToGenFrameConverter.convertFrame(gaitParam, model, dt,
+                                      gaitParam.actRobot, gaitParam.actEEPose, gaitParam.actFSensorWrench, gaitParam.actCogVel);
   return true;
 }
 
@@ -312,9 +309,9 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
   if(this->mode_.isASTRunning()) {
     if(this->mode_.isSyncToASTInit()){ // startAutoBalancer直後の初回. 内部パラメータのリセット
       // this->refToGenFrameConverter_.reset();
-      // this->actToGenFrameConverter_.reset();
+      this->actToGenFrameConverter_.reset();
     }
-    TorqueAutoStabilizer::execAutoStabilizer(this->gaitParam_, this->dt_);
+    TorqueAutoStabilizer::execAutoStabilizer(this->gaitParam_, this->dt_, this->model_, this->actToGenFrameConverter_);
   }
 
   this->writeOutPortData(this->gaitParam_);

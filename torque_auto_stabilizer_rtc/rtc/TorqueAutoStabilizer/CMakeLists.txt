@@ -13,6 +13,8 @@ find_package(pinocchio REQUIRED)
 rtmbuild_add_library(TorqueAutoStabilizer SHARED
   TorqueAutoStabilizer.cpp
   TorqueAutoStabilizerService_impl.cpp
+  MathUtil.cpp
+  ActToGenFrameConverter.cpp
   )
 target_link_libraries(TorqueAutoStabilizer
   ${catkin_LIBRARIES}
