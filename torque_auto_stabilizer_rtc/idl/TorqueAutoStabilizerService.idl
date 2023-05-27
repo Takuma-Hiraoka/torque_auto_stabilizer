@@ -5,5 +5,19 @@ module torque_auto_stabilizer_rtc
   interface TorqueAutoStabilizerService
   {
     boolean torqueAutoStabilizerParam(in double data);
+
+    /**
+     * @brief Start AutoStabilizer mode in which the robot controls the COM and outputs torque.
+     * @param
+     * @return true if set successfully, false otherwise
+     */
+    boolean startAutoStabilizer();
+
+    /**
+     * @brief Stop AutoStabilizer mode.
+     * @param
+     * @return true if set successfully, false otherwise
+     */
+    boolean stopAutoStabilizer();
   };
 };

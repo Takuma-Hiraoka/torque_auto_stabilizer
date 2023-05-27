@@ -13,6 +13,8 @@ public:
   TorqueAutoStabilizerService_impl();
   ~TorqueAutoStabilizerService_impl();
 
+  CORBA::Boolean startAutoStabilizer();
+  CORBA::Boolean stopAutoStabilizer();
   CORBA::Boolean torqueAutoStabilizerParam(const CORBA::Double data);
   void setComp(TorqueAutoStabilizer *i_comp);
 private:

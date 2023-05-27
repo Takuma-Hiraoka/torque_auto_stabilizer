@@ -18,3 +18,13 @@ CORBA::Boolean TorqueAutoStabilizerService_impl::torqueAutoStabilizerParam(const
 {
   return comp_->torqueAutoStabilizerParam(data);
 };
+
+CORBA::Boolean TorqueAutoStabilizerService_impl::startAutoStabilizer()
+{
+  return this->comp_->startAutoStabilizer();
+};
+
+CORBA::Boolean TorqueAutoStabilizerService_impl::stopAutoStabilizer()
+{
+  return this->comp_->stopAutoStabilizer();
+};

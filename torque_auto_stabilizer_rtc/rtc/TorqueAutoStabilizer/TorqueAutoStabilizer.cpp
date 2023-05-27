@@ -303,6 +303,7 @@ bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
 RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
   this->readInPortData(this->gaitParam_, this->model_, this->gaitParam_.refRobotPos, this->gaitParam_.actRobotPos, this->gaitParam_.actRobotVel);
   this->writeOutPortData(this->gaitParam_);
+  this->mode_.update(this->dt_);
   return RTC::RTC_OK;
 }
 
@@ -316,7 +317,28 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onDeactivated(RTC::UniqueId ec_id){
   std::cerr << "[" << m_profile.instance_name << "] "<< "onDeactivated(" << ec_id << ")" << std::endl;
   return RTC::RTC_OK;
 }
-
+bool TorqueAutoStabilizer::startAutoStabilizer(){
+  if(this->mode_.setNextTransition(ControlMode::START_AST)){
+    std::cerr << "[" << m_profile.instance_name << "] start auto stabilizer mode" << std::endl;
+    while (this->mode_.now() != ControlMode::MODE_AST) usleep(1000);
+    usleep(1000);
+    return true;
+  }else{
+    std::cerr << "[" << this->m_profile.instance_name << "] auto stabilizer is already started" << std::endl;
+    return false;
+  }
+}
+bool TorqueAutoStabilizer::stopAutoStabilizer(){
+  if(this->mode_.setNextTransition(ControlMode::STOP_AST)){
+    std::cerr << "[" << m_profile.instance_name << "] stop auto stabilizer mode" << std::endl;
+    while (this->mode_.now() != ControlMode::MODE_IDLE) usleep(1000);
+    usleep(1000);
+    return true;
+  }else{
+    std::cerr << "[" << this->m_profile.instance_name << "] auto stabilizer is already stopped or stabilizer is running" << std::endl;
+    return false;
+  }
+}
 bool TorqueAutoStabilizer::torqueAutoStabilizerParam(const double data){
 }
 
