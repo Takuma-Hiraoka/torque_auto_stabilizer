@@ -67,6 +67,7 @@ protected:
   std::mutex mutex_;
   bool getProperty(const std::string& key, std::string& ret);
   bool readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel);
+  static bool execAutoStabilizer(GaitParam& gaitParam, double dt);
   bool writeOutPortData(const GaitParam & gaitParam);
   class ControlMode{
   public:

@@ -278,6 +278,10 @@ bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pino
   }
 }
 
+bool TorqueAutoStabilizer::execAutoStabilizer(GaitParam& gaitParam, double dt) {
+  return true;
+}
+
 bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
 
   {
@@ -302,8 +306,19 @@ bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
 
 RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
   this->readInPortData(this->gaitParam_, this->model_, this->gaitParam_.refRobotPos, this->gaitParam_.actRobotPos, this->gaitParam_.actRobotVel);
-  this->writeOutPortData(this->gaitParam_);
+
   this->mode_.update(this->dt_);
+
+  if(this->mode_.isASTRunning()) {
+    if(this->mode_.isSyncToASTInit()){ // startAutoBalancer直後の初回. 内部パラメータのリセット
+      // this->refToGenFrameConverter_.reset();
+      // this->actToGenFrameConverter_.reset();
+    }
+    TorqueAutoStabilizer::execAutoStabilizer(this->gaitParam_, this->dt_);
+  }
+
+  this->writeOutPortData(this->gaitParam_);
+
   return RTC::RTC_OK;
 }
 
