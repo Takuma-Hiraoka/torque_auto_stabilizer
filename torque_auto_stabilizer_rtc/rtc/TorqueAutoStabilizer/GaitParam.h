@@ -16,7 +16,11 @@ public:
 
   std::string imuParentLink; // constant
   pinocchio::SE3 imuLocalT; // constant Parent Link Frame
-  
+
+  std::vector<std::string> fsensorName; // constant. 要素数2以上. 0番目がrleg, 1番目がllegという名前である必要がある
+  std::vector<std::string> fsensorParentLink; // constant. 要素数と順序はfsensorNameと同じ. 
+  std::vector<pinocchio::SE3> fsensorLocalT; // constant. 要素数と順序はfsenorNameと同じ. Parent Link Frame
+
 private:
   // parametor
   std::vector<bool> jointControllable; // 要素数はnq-7. 順序はurdf準拠．falseの場合、qやtauはrefの値をそのまま出力する(writeOutputPort時にref値で上書き). 指を位置制御にするため．
@@ -61,6 +65,12 @@ public:
   void initImu(const std::string& parentLink_, const pinocchio::SE3& localT_){
     imuParentLink = parentLink_;
     imuLocalT = localT_;
+  }
+
+  void push_backFSensor(const std::string& name_, const std::string& parentLink_, const pinocchio::SE3& localT_){
+    fsensorName.push_back(name_);
+    fsensorParentLink.push_back(parentLink_);
+    fsensorLocalT.push_back(localT_);
   }
 };
 #endif

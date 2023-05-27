@@ -172,6 +172,45 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
     }
   }
 
+  {
+    // load fsensor
+    std::string forceSensors; this->getProperty("force_sensors", forceSensors);
+    std::stringstream ss_forceSensors(forceSensors);
+    std::string buf;
+    while(std::getline(ss_forceSensors, buf, ',')){
+      std::string name;
+      std::string parentLink;
+      Eigen::Vector3d localp;
+      Eigen::Vector3d localaxis;
+      double localangle;
+
+      //   name, parentLink, x, y, z, theta, ax, ay, az
+      name = buf;
+      if(!std::getline(ss_forceSensors, buf, ',')) break; parentLink = buf;
+      if(!std::getline(ss_forceSensors, buf, ',')) break; localp[0] = std::stod(buf);
+      if(!std::getline(ss_forceSensors, buf, ',')) break; localp[1] = std::stod(buf);
+      if(!std::getline(ss_forceSensors, buf, ',')) break; localp[2] = std::stod(buf);
+      if(!std::getline(ss_forceSensors, buf, ',')) break; localaxis[0] = std::stod(buf);
+      if(!std::getline(ss_forceSensors, buf, ',')) break; localaxis[1] = std::stod(buf);
+      if(!std::getline(ss_forceSensors, buf, ',')) break; localaxis[2] = std::stod(buf);
+      if(!std::getline(ss_forceSensors, buf, ',')) break; localangle = std::stod(buf);
+
+      // check validity
+      name.erase(std::remove(name.begin(), name.end(), ' '), name.end()); // remove whitespace
+      parentLink.erase(std::remove(parentLink.begin(), parentLink.end(), ' '), parentLink.end()); // remove whitespace
+      if(!this->model_.existJointName(parentLink)){
+        std::cerr << "\x1b[31m[" << this->m_profile.instance_name << "] " << " link [" << parentLink << "]" << " is not found for " << name << "\x1b[39m" << std::endl;
+        return RTC::RTC_ERROR;
+      }
+      Eigen::Matrix3d localR;
+      if(localaxis.norm() == 0) localR = Eigen::Matrix3d::Identity();
+      else localR = Eigen::AngleAxisd(localangle, localaxis.normalized()).toRotationMatrix();
+      pinocchio::SE3 localT(localR,localp);
+      this->gaitParam_.push_backFSensor(name, parentLink, localT);
+    }
+    // 0番目が右脚. 1番目が左脚. という仮定がある.
+  }
+
   return RTC::RTC_OK;
 }
 
