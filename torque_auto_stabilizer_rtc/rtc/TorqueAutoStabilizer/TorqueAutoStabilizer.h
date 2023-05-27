@@ -35,6 +35,8 @@ protected:
   RTC::TimedDoubleSeq m_dqAct_;
   RTC::InPort<RTC::TimedDoubleSeq> m_dqActIn_;
   RTC::TimedDoubleSeq m_tauAct_;
+  RTC::TimedOrientation3D m_actImu_; // Actual Imu World Frame. 
+  RTC::InPort<RTC::TimedOrientation3D> m_actImuIn_;
   RTC::InPort<RTC::TimedDoubleSeq> m_tauActIn_;
   RTC::TimedDoubleSeq m_q_;
   RTC::OutPort<RTC::TimedDoubleSeq> m_qOut_;
@@ -62,7 +64,7 @@ protected:
   double dt_;
   std::mutex mutex_;
   bool getProperty(const std::string& key, std::string& ret);
-  bool readInPortData(Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel);
+  bool readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel);
   bool writeOutPortData(const GaitParam & gaitParam);
 };
 

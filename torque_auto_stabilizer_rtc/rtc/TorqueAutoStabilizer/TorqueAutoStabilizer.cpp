@@ -1,5 +1,6 @@
 #include "TorqueAutoStabilizer.h"
 #include "pinocchio/parsers/urdf.hpp"
+#include "MathUtil.h"
 #include <fstream>
 #include <sstream>
 
@@ -11,6 +12,7 @@ TorqueAutoStabilizer::TorqueAutoStabilizer(RTC::Manager* manager):
   m_refBaseRpyIn_("refBaseRpyIn", m_refBaseRpy_),
   m_qActIn_("qActIn", m_qAct_),
   m_dqActIn_("dqActIn", m_dqAct_),
+  m_actImuIn_("actImuIn", m_actImu_),
   m_tauActIn_("tauActIn", m_tauAct_),
   m_qOut_("q", m_q_),
   m_tauOut_("tauOut", m_tau_),
@@ -26,6 +28,7 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
   addInPort("refBaseRpyIn", this->m_refBaseRpyIn_);
   addInPort("qActIn", this->m_qActIn_);
   addInPort("dqActIn", this->m_dqActIn_);
+  addInPort("actImuIn", this->m_actImuIn_);
   addInPort("tauActIn", this->m_tauActIn_);
   addOutPort("q", this->m_qOut_);
   addOutPort("tauOut", this->m_tauOut_);
@@ -214,7 +217,7 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
   return RTC::RTC_OK;
 }
 
-bool TorqueAutoStabilizer::readInPortData(Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel){
+bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel){
   if (this->m_qRefIn_.isNew()){
     this->m_qRefIn_.read();
     for(int i=0;i<this->m_qRef_.data.length();i++){
@@ -258,6 +261,18 @@ bool TorqueAutoStabilizer::readInPortData(Eigen::VectorXd& refRobotPos, Eigen::V
     }
   }
 
+  if(this->m_actImuIn_.isNew()){
+    this->m_actImuIn_.read();
+    pinocchio::SE3 imuParent = gaitParam.actRobot.oMi[model.getJointId(gaitParam.imuParentLink)];
+    Eigen::Matrix3d imuR = imuParent.rotation() * gaitParam.imuLocalT.rotation();
+    Eigen::Matrix3d actR = MathUtil::rotFromRpy(this->m_actImu_.data.r, this->m_actImu_.data.p, this->m_actImu_.data.y);
+    Eigen::Quaterniond q = Eigen::AngleAxisd(actR) * Eigen::AngleAxisd(imuR.transpose() * gaitParam.actRobot.oMi[model.getJointId("root_joint")].rotation());// 単純に3x3行列の空間でRを積算していると、だんだん数値誤差によって回転行列でなくなってしまう恐れがあるので念の為
+    actRobotPos[3] = q.coeffs()[0];
+    actRobotPos[4] = q.coeffs()[1];
+    actRobotPos[5] = q.coeffs()[2];
+    actRobotPos[6] = q.coeffs()[3];
+  }
+
   if (this->m_tauActIn_.isNew()){
     this->m_tauActIn_.read();
   }
@@ -286,7 +301,7 @@ bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
 }
 
 RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
-  this->readInPortData(this->gaitParam_.refRobotPos, this->gaitParam_.actRobotPos, this->gaitParam_.actRobotVel);
+  this->readInPortData(this->gaitParam_, this->model_, this->gaitParam_.refRobotPos, this->gaitParam_.actRobotPos, this->gaitParam_.actRobotVel);
   this->writeOutPortData(this->gaitParam_);
   return RTC::RTC_OK;
 }
