@@ -8,6 +8,12 @@
 class GaitParam {
   // pinocchioではqは(base position, base quaternion, joints),vやaも(base pos, base rot, joints)
   // data portとのやり取り時及びcout時にtableをみて直す。
+public:
+    // constant parameter
+  std::vector<std::string> eeName; // constant. 要素数2以上. 0番目がrleg, 1番目がllegという名前である必要がある
+  std::vector<std::string> eeParentLink; // constant. 要素数と順序はeeNameと同じ. 
+  std::vector<pinocchio::SE3> eeLocalT; // constant. 要素数と順序はeeNameと同じ. Parent Link Frame
+
 private:
   // parametor
   std::vector<bool> jointControllable; // 要素数はnq-7. 順序はurdf準拠．falseの場合、qやtauはrefの値をそのまま出力する(writeOutputPort時にref値で上書き). 指を位置制御にするため．
@@ -41,6 +47,12 @@ public:
     pinocchio::forwardKinematics(model,actRobot,q);
     genRobotTqc = data;
     pinocchio::forwardKinematics(model,genRobotTqc,q);
+  }
+
+  void push_backEE(const std::string& name_, const std::string& parentLink_, const pinocchio::SE3& localT_){
+    eeName.push_back(name_);
+    eeParentLink.push_back(parentLink_);
+    eeLocalT.push_back(localT_);
   }
 };
 #endif
