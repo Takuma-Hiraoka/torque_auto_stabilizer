@@ -6,7 +6,7 @@
 class TorqueAutoStabilizer;
 
 class TorqueAutoStabilizerService_impl
-  : public virtual POA_torque_auto_stabilizer_rtc::TorqueAutoStabilizerService,
+  : public virtual POA_OpenHRP::TorqueAutoStabilizerService,
     public virtual PortableServer::RefCountServantBase
 {
 public:

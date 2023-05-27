@@ -1,6 +1,6 @@
 #include "BasicDataType.idl"
 
-module torque_auto_stabilizer_rtc
+module OpenHRP
 {
   interface TorqueAutoStabilizerService
   {
