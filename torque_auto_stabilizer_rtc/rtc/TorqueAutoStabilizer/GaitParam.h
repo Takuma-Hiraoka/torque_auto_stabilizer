@@ -14,6 +14,9 @@ public:
   std::vector<std::string> eeParentLink; // constant. 要素数と順序はeeNameと同じ. 
   std::vector<pinocchio::SE3> eeLocalT; // constant. 要素数と順序はeeNameと同じ. Parent Link Frame
 
+  std::string imuParentLink; // constant
+  pinocchio::SE3 imuLocalT; // constant Parent Link Frame
+  
 private:
   // parametor
   std::vector<bool> jointControllable; // 要素数はnq-7. 順序はurdf準拠．falseの場合、qやtauはrefの値をそのまま出力する(writeOutputPort時にref値で上書き). 指を位置制御にするため．
@@ -53,6 +56,11 @@ public:
     eeName.push_back(name_);
     eeParentLink.push_back(parentLink_);
     eeLocalT.push_back(localT_);
+  }
+
+  void initImu(const std::string& parentLink_, const pinocchio::SE3& localT_){
+    imuParentLink = parentLink_;
+    imuLocalT = localT_;
   }
 };
 #endif

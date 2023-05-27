@@ -137,6 +137,41 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
     // 0番目が右脚. 1番目が左脚. という仮定がある.
   }
 
+  {
+    // load imu
+    std::string imu; this->getProperty("imu", imu);
+    std::stringstream ss_imu(imu);
+    std::string buf;
+    while(std::getline(ss_imu, buf, ',')){
+      std::string parentLink;
+      Eigen::Vector3d localp;
+      Eigen::Vector3d localaxis;
+      double localangle;
+
+      //   parentLink, x, y, z, theta, ax, ay, az
+      parentLink = buf;
+      if(!std::getline(ss_imu, buf, ',')) break; localp[0] = std::stod(buf);
+      if(!std::getline(ss_imu, buf, ',')) break; localp[1] = std::stod(buf);
+      if(!std::getline(ss_imu, buf, ',')) break; localp[2] = std::stod(buf);
+      if(!std::getline(ss_imu, buf, ',')) break; localaxis[0] = std::stod(buf);
+      if(!std::getline(ss_imu, buf, ',')) break; localaxis[1] = std::stod(buf);
+      if(!std::getline(ss_imu, buf, ',')) break; localaxis[2] = std::stod(buf);
+      if(!std::getline(ss_imu, buf, ',')) break; localangle = std::stod(buf);
+
+      // check validity
+      parentLink.erase(std::remove(parentLink.begin(), parentLink.end(), ' '), parentLink.end()); // remove whitespace
+      if(!this->model_.existJointName(parentLink)){
+        std::cerr << "\x1b[31m[" << this->m_profile.instance_name << "] " << " link [" << parentLink << "]" << " is not found for imu \x1b[39m" << std::endl;
+        return RTC::RTC_ERROR;
+      }
+      Eigen::Matrix3d localR;
+      if(localaxis.norm() == 0) localR = Eigen::Matrix3d::Identity();
+      else localR = Eigen::AngleAxisd(localangle, localaxis.normalized()).toRotationMatrix();
+      pinocchio::SE3 localT(localR,localp);
+      this->gaitParam_.initImu(parentLink, localT);
+    }
+  }
+
   return RTC::RTC_OK;
 }
 
