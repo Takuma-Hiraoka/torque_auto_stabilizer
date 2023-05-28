@@ -323,13 +323,15 @@ bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pino
   }
 }
 
-bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter, const RefToGenFrameConverter& refToGenFrameConverter) {
+bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter, const RefToGenFrameConverter& refToGenFrameConverter, const FootStepGenerator& footStepGenerator) {
   // FootOrigin座標系を用いてactRobotRawをgenerate frameに投影しactRobotとする
   if(mode.isSyncToASTInit()){
     refToGenFrameConverter.initFootCoords(gaitParam, model, gaitParam.footMidCoords, gaitParam.refRobot, gaitParam.footStepNodesList);
+    footStepGenerator.initFootStepNodesList(gaitParam, model,
+                                            gaitParam.footStepNodesList, gaitParam.srcCoords, gaitParam.dstCoordsOrg, gaitParam.remainTimeOrg, gaitParam.swingState, gaitParam.elapsedTime, gaitParam.prevSupportPhase);
   }
   actToGenFrameConverter.convertFrame(gaitParam, model, dt,
-                                      gaitParam.actRobot, gaitParam.actEEPose, gaitParam.actFSensorWrench, gaitParam.actCogVel);
+                                      gaitParam.actRobot, gaitParam.actEEPose, gaitParam.actFSensorWrench, gaitParam.actCogVel, gaitParam.actCog);
   refToGenFrameConverter.convertFrame(gaitParam, model, dt, gaitParam.actRobot, gaitParam.refRobot, gaitParam.refEEPose, gaitParam.refEEWrench, gaitParam.refdz, gaitParam.footMidCoords);
   return true;
 }
@@ -374,8 +376,9 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
     if(this->mode_.isSyncToASTInit()){ // startAutoBalancer直後の初回. 内部パラメータのリセット
       this->refToGenFrameConverter_.reset();
       this->actToGenFrameConverter_.reset();
+      this->footStepGenerator_.reset();
     }
-    TorqueAutoStabilizer::execAutoStabilizer(this->mode_, this->gaitParam_, this->dt_, this->model_, this->actToGenFrameConverter_, this->refToGenFrameConverter_);
+    TorqueAutoStabilizer::execAutoStabilizer(this->mode_, this->gaitParam_, this->dt_, this->model_, this->actToGenFrameConverter_, this->refToGenFrameConverter_, this->footStepGenerator_);
   }
 
   this->writeOutPortData(this->gaitParam_);

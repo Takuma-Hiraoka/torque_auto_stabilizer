@@ -21,7 +21,7 @@
 #include "GaitParam.h"
 #include "ActToGenFrameConverter.h"
 #include "RefToGenFrameConverter.h"
-
+#include "FootStepGenerator.h"
 
 class TorqueAutoStabilizer : public RTC::DataFlowComponentBase{
 protected:
@@ -139,10 +139,11 @@ protected:
   GaitParam gaitParam_;
   ActToGenFrameConverter actToGenFrameConverter_;
   RefToGenFrameConverter refToGenFrameConverter_;
+  FootStepGenerator footStepGenerator_;
   ControlMode mode_;
   bool getProperty(const std::string& key, std::string& ret);
   bool readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel, std::vector<Eigen::Vector6d>& actFSensorWrenchOrigin);
-  static bool execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter, const RefToGenFrameConverter& refToGenFrameConverter);
+  static bool execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter, const RefToGenFrameConverter& refToGenFrameConverter, const FootStepGenerator& footStepGenerator);
   bool writeOutPortData(const GaitParam & gaitParam);
 
 };

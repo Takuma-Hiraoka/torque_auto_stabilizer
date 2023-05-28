@@ -2,7 +2,7 @@
 #include "pinocchio/algorithm/center-of-mass.hpp"
 
 bool ActToGenFrameConverter::convertFrame(const GaitParam& gaitParam, const pinocchio::Model& model, double dt, // input
-                                          pinocchio::Data& actRobot, std::vector<pinocchio::SE3>& o_actEEPose, std::vector<Eigen::Vector6d>& o_actFSensorWrench, mathutil::FirstOrderLowPassFilter<Eigen::Vector3d>& o_actCogVel) const {
+                                          pinocchio::Data& actRobot, std::vector<pinocchio::SE3>& o_actEEPose, std::vector<Eigen::Vector6d>& o_actFSensorWrench, mathutil::FirstOrderLowPassFilter<Eigen::Vector3d>& o_actCogVel, Eigen::Vector3d o_actCog) const {
 
   // Dataはroot pos(3)、root quarternion(4)、joint angles
   Eigen::Vector3d actCogPrev = pinocchio::centerOfMass(model, actRobot, false); // 各リンクの重心は使わない．
@@ -57,22 +57,24 @@ bool ActToGenFrameConverter::convertFrame(const GaitParam& gaitParam, const pino
     }
   }
 
+  Eigen::Vector3d actCog;
   Eigen::Vector3d actCogVel;
   {
     // actCogを計算
+    actCog = pinocchio::centerOfMass(model, actRobot, false);
     bool genContactState_changed = false;
     for(int i=0;i<NUM_LEGS;i++){
-      // TODO
-      //if(gaitParam.footstepNodesList[0].isSupportPhase[i] != gaitParam.prevSupportPhase[i]) genContactState_changed = true;
+      if(gaitParam.footStepNodesList[0].isSupportPhase[i] != gaitParam.prevSupportPhase[i]) genContactState_changed = true;
     }
     if(genContactState_changed){
       //座標系が飛んでいるので、gaitParam.actCogVel は前回の周期の値をそのままつかう
       actCogVel = gaitParam.actCogVel.value();
     }else{
-      actCogVel = (pinocchio::centerOfMass(model, actRobot, false) - actCogPrev) / dt;
+      actCogVel = (actCog - actCogPrev) / dt;
     }
   }
 
+  o_actCog = actCog;
   o_actEEPose = actEEPose;
   o_actFSensorWrench = actFSensorWrench;
   if(this->isInitial){

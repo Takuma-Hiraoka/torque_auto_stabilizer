@@ -25,7 +25,7 @@ public:
 
   // actual frameで表現されたactRobotPos/Velをgenerate frameに投影しactRobotとし、各種actual値をgenerate frameに変換する
   bool convertFrame(const GaitParam& gaitParam, const pinocchio::Model& model, double dt, // input
-                    pinocchio::Data& actRobot, std::vector<pinocchio::SE3>& o_actEEPose, std::vector<Eigen::Vector6d>& o_actFSensorWrench, mathutil::FirstOrderLowPassFilter<Eigen::Vector3d>& o_actCogVel) const; // output
+                    pinocchio::Data& actRobot, std::vector<pinocchio::SE3>& o_actEEPose, std::vector<Eigen::Vector6d>& o_actFSensorWrench, mathutil::FirstOrderLowPassFilter<Eigen::Vector3d>& o_actCogVel, Eigen::Vector3d o_actCog) const; // output
 };
 
 #endif
