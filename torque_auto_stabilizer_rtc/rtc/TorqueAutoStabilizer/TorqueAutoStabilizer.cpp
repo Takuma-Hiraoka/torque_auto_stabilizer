@@ -244,6 +244,8 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
       this->addOutPort(name.c_str(), *(this->m_actEEWrenchOut_[i]));
     }
 
+    // TODO
+    // 各ForceSensorにつき、act<name>WrenchOutという(fsensorName.size() - eeName.size() 個の)OutPortをつくる
   }
 
   return RTC::RTC_OK;

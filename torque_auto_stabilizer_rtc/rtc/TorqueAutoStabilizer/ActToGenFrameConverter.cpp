@@ -40,17 +40,20 @@ bool ActToGenFrameConverter::convertFrame(const GaitParam& gaitParam, const pino
   std::vector<pinocchio::SE3> actEEPose(gaitParam.eeName.size());
   std::vector<Eigen::Vector6d> actFSensorWrench(gaitParam.eeName.size(), Eigen::Vector6d::Zero());
   {
-    // 各エンドエフェクタのactualの位置・力を計算
-    for(int i=0;i<gaitParam.eeName.size(); i++){
-      actEEPose[i] = actRobot.oMi[model.getJointId(gaitParam.eeParentLink[i])]*gaitParam.eeLocalT[i];
+    for(int i=0;i<gaitParam.fsensorName.size(); i++){ // eeName.sizeまではendeffectorまわり、それ以降はsensorまわり
       pinocchio::SE3 senPose = actRobot.oMi[model.getJointId(gaitParam.fsensorParentLink[i])]*gaitParam.fsensorLocalT[i];
-      pinocchio::SE3 eeTosenPose = actEEPose[i].inverse() * senPose;
-      Eigen::Vector6d eefF; // endeffector frame. endeffector origin.
-      eefF.head<3>() = eeTosenPose.rotation() * gaitParam.actFSensorWrenchOrigin[i].head<3>();
-      eefF.tail<3>() = eeTosenPose.rotation() * gaitParam.actFSensorWrenchOrigin[i].tail<3>() + eeTosenPose.translation().cross(eefF.head<3>());
-      actFSensorWrench[i].head<3>() = actEEPose[i].rotation() * eefF.head<3>();
-      actFSensorWrench[i].tail<3>() = actEEPose[i].rotation() * eefF.tail<3>();
-
+      if (i<gaitParam.eeName.size()){    // 各エンドエフェクタのactualの位置・力を計算
+        actEEPose[i] = actRobot.oMi[model.getJointId(gaitParam.eeParentLink[i])]*gaitParam.eeLocalT[i];
+        pinocchio::SE3 eeTosenPose = actEEPose[i].inverse() * senPose;
+        Eigen::Vector6d eefF; // endeffector frame. endeffector origin.
+        eefF.head<3>() = eeTosenPose.rotation() * gaitParam.actFSensorWrenchOrigin[i].head<3>();
+        eefF.tail<3>() = eeTosenPose.rotation() * gaitParam.actFSensorWrenchOrigin[i].tail<3>() + eeTosenPose.translation().cross(eefF.head<3>());
+        actFSensorWrench[i].head<3>() = actEEPose[i].rotation() * eefF.head<3>();
+        actFSensorWrench[i].tail<3>() = actEEPose[i].rotation() * eefF.tail<3>();
+      } else {
+        actFSensorWrench[i].head<3>() = senPose.rotation() * gaitParam.actFSensorWrenchOrigin[i].head<3>();
+        actFSensorWrench[i].tail<3>() = senPose.rotation() * gaitParam.actFSensorWrenchOrigin[i].tail<3>();
+      }
     }
   }
 
