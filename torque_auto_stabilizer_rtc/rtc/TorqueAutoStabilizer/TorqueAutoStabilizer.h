@@ -1,6 +1,7 @@
 #ifndef TorqueAutoStabilizer_H
 #define TorqueAutoStabilizer_H
 
+#include <memory>
 #include <mutex>
 #include <vector>
 
@@ -31,6 +32,8 @@ protected:
   RTC::InPort<RTC::TimedPoint3D> m_refBasePosIn_;
   RTC::TimedOrientation3D m_refBaseRpy_; // Reference World frame
   RTC::InPort<RTC::TimedOrientation3D> m_refBaseRpyIn_;
+  std::vector<RTC::TimedDoubleSeq> m_refEEWrench_; // Reference FootOrigin frame. EndEffector origin. 要素数及び順番はgaitParam_.eeNameと同じ. ロボットが受ける力
+  std::vector<std::unique_ptr<RTC::InPort<RTC::TimedDoubleSeq> > > m_refEEWrenchIn_;
   RTC::TimedDoubleSeq m_qAct_;
   RTC::InPort<RTC::TimedDoubleSeq> m_qActIn_;
   RTC::TimedDoubleSeq m_dqAct_;
@@ -39,10 +42,14 @@ protected:
   RTC::TimedOrientation3D m_actImu_; // Actual Imu World Frame. 
   RTC::InPort<RTC::TimedOrientation3D> m_actImuIn_;
   RTC::InPort<RTC::TimedDoubleSeq> m_tauActIn_;
+  std::vector<RTC::TimedDoubleSeq> m_actWrench_; // Actual ForceSensor frame. ForceSensor origin. 要素数及び順番はrobot->forceSensorsと同じ. ロボットが受ける力
+  std::vector<std::unique_ptr<RTC::InPort<RTC::TimedDoubleSeq> > > m_actWrenchIn_;
   RTC::TimedDoubleSeq m_q_;
   RTC::OutPort<RTC::TimedDoubleSeq> m_qOut_;
   RTC::TimedDoubleSeq m_tau_;
   RTC::OutPort<RTC::TimedDoubleSeq> m_tauOut_;
+  std::vector<RTC::TimedDoubleSeq> m_actEEWrench_; // Generate World frame. EndEffector origin. 要素数及び順番はgaitParam_.eeNameと同じ. ロボットが受ける力
+  std::vector<std::unique_ptr<RTC::OutPort<RTC::TimedDoubleSeq> > > m_actEEWrenchOut_;
 
   TorqueAutoStabilizerService_impl m_service0_;
   RTC::CorbaPort m_torqueAutoStabilizerServicePort_;
@@ -67,7 +74,7 @@ protected:
   double dt_;
   std::mutex mutex_;
   bool getProperty(const std::string& key, std::string& ret);
-  bool readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel);
+  bool readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel, std::vector<Eigen::Vector6d>& actFSensorWrenchOrigin);
   static bool execAutoStabilizer(GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter);
   bool writeOutPortData(const GaitParam & gaitParam);
   class ControlMode{

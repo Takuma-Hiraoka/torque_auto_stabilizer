@@ -214,10 +214,42 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
     // 0番目が右脚. 1番目が左脚. という仮定がある.
   }
 
+    {
+    // add more ports (EndEffectorやForceSensorの情報を使って)
+
+    // 各EndEffectorにつき、ref<name>WrenchInというInPortをつくる
+    this->m_refEEWrenchIn_.resize(this->gaitParam_.eeName.size());
+    this->m_refEEWrench_.resize(this->gaitParam_.eeName.size());
+    for(int i=0;i<this->gaitParam_.eeName.size();i++){
+      std::string name = "ref"+this->gaitParam_.eeName[i]+"WrenchIn";
+      this->m_refEEWrenchIn_[i] = std::make_unique<RTC::InPort<RTC::TimedDoubleSeq> >(name.c_str(), this->m_refEEWrench_[i]);
+      this->addInPort(name.c_str(), *(this->m_refEEWrenchIn_[i]));
+    }
+
+    // 各ForceSensorにつき、act<name>InというInportをつくる
+    this->m_actWrenchIn_.resize(this->gaitParam_.fsensorName.size());
+    this->m_actWrench_.resize(this->gaitParam_.fsensorName.size());
+    for(int i=0;i<this->gaitParam_.fsensorName.size();i++){
+      std::string name = "act"+this->gaitParam_.fsensorName[i]+"In";
+      this->m_actWrenchIn_[i] = std::make_unique<RTC::InPort<RTC::TimedDoubleSeq> >(name.c_str(), this->m_actWrench_[i]);
+      this->addInPort(name.c_str(), *(this->m_actWrenchIn_[i]));
+    }
+
+    // 各EndEffectorにつき、act<name>WrenchOutというOutPortをつくる
+    this->m_actEEWrenchOut_.resize(this->gaitParam_.eeName.size());
+    this->m_actEEWrench_.resize(this->gaitParam_.eeName.size());
+    for(int i=0;i<this->gaitParam_.eeName.size();i++){
+      std::string name = "act"+this->gaitParam_.eeName[i]+"WrenchOut";
+      this->m_actEEWrenchOut_[i] = std::make_unique<RTC::OutPort<RTC::TimedDoubleSeq> >(name.c_str(), this->m_actEEWrench_[i]);
+      this->addOutPort(name.c_str(), *(this->m_actEEWrenchOut_[i]));
+    }
+
+  }
+
   return RTC::RTC_OK;
 }
 
-bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel){
+bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel, std::vector<Eigen::Vector6d>& actFSensorWrenchOrigin){
   if (this->m_qRefIn_.isNew()){
     this->m_qRefIn_.read();
     for(int i=0;i<this->m_qRef_.data.length();i++){
@@ -242,6 +274,12 @@ bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pino
         * Eigen::AngleAxisd(this->m_refBaseRpy_.data.p, Eigen::Vector3d::UnitY())
         * Eigen::AngleAxisd(this->m_refBaseRpy_.data.y, Eigen::Vector3d::UnitZ());
     refRobotPos.segment(3,4) = q.coeffs();
+  }
+
+  for(int i=0;i<this->m_refEEWrenchIn_.size();i++){
+    if(this->m_refEEWrenchIn_[i]->isNew()){
+      this->m_refEEWrenchIn_[i]->read();
+    }
   }
 
   if (this->m_qActIn_.isNew()){
@@ -269,6 +307,17 @@ bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pino
 
   if (this->m_tauActIn_.isNew()){
     this->m_tauActIn_.read();
+  }
+
+  for(int i=0;i<this->m_actWrenchIn_.size();i++){
+    if(this->m_actWrenchIn_[i]->isNew()){
+      this->m_actWrenchIn_[i]->read();
+      if(this->m_actWrench_[i].data.length() == 6){
+        for(int j=0;j<6;j++){
+          actFSensorWrenchOrigin[i][j] = this->m_actWrench_[i].data[j];
+        }
+      }
+    }
   }
 }
 
@@ -299,10 +348,18 @@ bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
     this->m_tauOut_.write();
   }
 
+  if(this->mode_.isASTRunning()){
+    for(int i=0;i<gaitParam.fsensorName.size();i++){
+      this->m_actEEWrench_[i].tm = this->m_qRef_.tm;
+      this->m_actEEWrench_[i].data.length(6);
+      for(int j=0;j<6;j++) this->m_actEEWrench_[i].data[j] = gaitParam.actFSensorWrench[i][j];
+      this->m_actEEWrenchOut_[i]->write();
+    }
+  }
 }
 
 RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
-  this->readInPortData(this->gaitParam_, this->model_, this->gaitParam_.refRobotPos, this->gaitParam_.actRobotPos, this->gaitParam_.actRobotVel);
+  this->readInPortData(this->gaitParam_, this->model_, this->gaitParam_.refRobotPos, this->gaitParam_.actRobotPos, this->gaitParam_.actRobotVel, this->gaitParam_.actFSensorWrenchOrigin);
 
   this->mode_.update(this->dt_);
 

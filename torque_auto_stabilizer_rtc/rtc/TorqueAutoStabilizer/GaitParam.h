@@ -47,7 +47,7 @@ public:
   std::vector<Eigen::Vector6d> actFSensorWrench; // 要素数と順序はfsenorNameと同じ.generate frame. この値でインピーダンス制御を行うので、はじめからEE数まではEndEffector origin. それ以降はfsensorParentLink origin．ロボットが受けた力
 
   // LegCoordsGenerator
-  std::vector<pinocchio::SE3> eeTargetPose; // 要素数と順序はeeNameと同じ.generate frame. abcで計算された目標位置姿勢
+  std::vector<pinocchio::SE3> eeTargetPose; // 要素数と順序はeeNameと同じ.generate frame. astで計算された目標位置姿勢
 
   // Stabillizer
   pinocchio::Data genRobotTqc;
