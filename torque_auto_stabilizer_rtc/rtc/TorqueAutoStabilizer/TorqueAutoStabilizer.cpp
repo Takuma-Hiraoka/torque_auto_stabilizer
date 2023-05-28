@@ -323,10 +323,14 @@ bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pino
   }
 }
 
-bool TorqueAutoStabilizer::execAutoStabilizer(GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter) {
+bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter, const RefToGenFrameConverter& refToGenFrameConverter) {
   // FootOrigin座標系を用いてactRobotRawをgenerate frameに投影しactRobotとする
+  if(mode.isSyncToASTInit()){
+    refToGenFrameConverter.initFootCoords(gaitParam, model, gaitParam.footMidCoords, gaitParam.refRobot, gaitParam.footStepNodesList);
+  }
   actToGenFrameConverter.convertFrame(gaitParam, model, dt,
                                       gaitParam.actRobot, gaitParam.actEEPose, gaitParam.actFSensorWrench, gaitParam.actCogVel);
+  refToGenFrameConverter.convertFrame(gaitParam, model, dt, gaitParam.actRobot, gaitParam.refRobot, gaitParam.refEEPose, gaitParam.refEEWrench, gaitParam.refdz, gaitParam.footMidCoords);
   return true;
 }
 
@@ -364,13 +368,14 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
   this->readInPortData(this->gaitParam_, this->model_, this->gaitParam_.refRobotPos, this->gaitParam_.actRobotPos, this->gaitParam_.actRobotVel, this->gaitParam_.actFSensorWrenchOrigin);
 
   this->mode_.update(this->dt_);
+  this->refToGenFrameConverter_.update(this->dt_);
 
   if(this->mode_.isASTRunning()) {
     if(this->mode_.isSyncToASTInit()){ // startAutoBalancer直後の初回. 内部パラメータのリセット
-      // this->refToGenFrameConverter_.reset();
+      this->refToGenFrameConverter_.reset();
       this->actToGenFrameConverter_.reset();
     }
-    TorqueAutoStabilizer::execAutoStabilizer(this->gaitParam_, this->dt_, this->model_, this->actToGenFrameConverter_);
+    TorqueAutoStabilizer::execAutoStabilizer(this->mode_, this->gaitParam_, this->dt_, this->model_, this->actToGenFrameConverter_, this->refToGenFrameConverter_);
   }
 
   this->writeOutPortData(this->gaitParam_);

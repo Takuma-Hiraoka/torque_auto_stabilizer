@@ -20,6 +20,8 @@
 #include "TorqueAutoStabilizerService_impl.h"
 #include "GaitParam.h"
 #include "ActToGenFrameConverter.h"
+#include "RefToGenFrameConverter.h"
+
 
 class TorqueAutoStabilizer : public RTC::DataFlowComponentBase{
 protected:
@@ -65,18 +67,9 @@ public:
   bool stopAutoStabilizer();
   bool torqueAutoStabilizerParam(const double data);
 
-private:
-  pinocchio::Model model_;
-  std::vector<int> joint_id_table_;
-  GaitParam gaitParam_;
-  ActToGenFrameConverter actToGenFrameConverter_;
 protected:
   double dt_;
   std::mutex mutex_;
-  bool getProperty(const std::string& key, std::string& ret);
-  bool readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel, std::vector<Eigen::Vector6d>& actFSensorWrenchOrigin);
-  static bool execAutoStabilizer(GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter);
-  bool writeOutPortData(const GaitParam & gaitParam);
   class ControlMode{
   public:
     /*
@@ -141,7 +134,17 @@ protected:
     bool isSyncToIdle() const{ return current==MODE_SYNC_TO_IDLE;}
     bool isSyncToIdleInit() const{ return (current != previous) && isSyncToIdle();}
   };
+  pinocchio::Model model_;
+  std::vector<int> joint_id_table_;
+  GaitParam gaitParam_;
+  ActToGenFrameConverter actToGenFrameConverter_;
+  RefToGenFrameConverter refToGenFrameConverter_;
   ControlMode mode_;
+  bool getProperty(const std::string& key, std::string& ret);
+  bool readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel, std::vector<Eigen::Vector6d>& actFSensorWrenchOrigin);
+  static bool execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter, const RefToGenFrameConverter& refToGenFrameConverter);
+  bool writeOutPortData(const GaitParam & gaitParam);
+
 };
 
 extern "C"

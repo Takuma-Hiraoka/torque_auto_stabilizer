@@ -15,6 +15,7 @@ rtmbuild_add_library(TorqueAutoStabilizer SHARED
   TorqueAutoStabilizerService_impl.cpp
   MathUtil.cpp
   ActToGenFrameConverter.cpp
+  RefToGenFrameConverter.cpp
   )
 target_link_libraries(TorqueAutoStabilizer
   ${catkin_LIBRARIES}
