@@ -1,4 +1,4 @@
-#include "pinocchio/algorithm/kinematics.hpp"
+#include "pinocchio/spatial/se3.hpp"
 #include "MathUtil.h"
 
 namespace mathutil
@@ -76,9 +76,9 @@ namespace mathutil
       return Eigen::Matrix3d(Eigen::AngleAxisd(angle, axis) * m_);
     }
   }
-  Eigen::Transform<double, 3, Eigen::AffineCompact> orientCoordToAxis(const Eigen::Transform<double, 3, Eigen::AffineCompact>& m, const Eigen::Vector3d& axis, const Eigen::Vector3d& localaxis){
-    Eigen::Transform<double, 3, Eigen::AffineCompact> ret = m;
-    ret.linear() = mathutil::orientCoordToAxis(ret.linear(), axis, localaxis);
+  pinocchio::SE3 orientCoordToAxis(const pinocchio::SE3& m, const Eigen::Vector3d& axis, const Eigen::Vector3d& localaxis){
+    pinocchio::SE3 ret = m;
+    ret.rotation() = mathutil::orientCoordToAxis(ret.rotation(), axis, localaxis);
     return ret;
   }
 
@@ -88,16 +88,16 @@ namespace mathutil
     return Eigen::AngleAxisd(M1 * Eigen::AngleAxisd(trans.angle() * r, trans.axis()));
   }
 
-  Eigen::Transform<double, 3, Eigen::AffineCompact> calcMidCoords(const std::vector<Eigen::Transform<double, 3, Eigen::AffineCompact>>& coords, const std::vector<double>& weights){
+  pinocchio::SE3 calcMidCoords(const std::vector<pinocchio::SE3>& coords, const std::vector<double>& weights){
     // coordsとweightsのサイズは同じでなければならない
     double sumWeight = 0.0;
-    Eigen::Transform<double, 3, Eigen::AffineCompact> midCoords = Eigen::Transform<double, 3, Eigen::AffineCompact>::Identity();
+    pinocchio::SE3 midCoords;
 
     for(int i=0;i<coords.size();i++){
       if(weights[i]<=0) continue;
       midCoords.translation() = ((midCoords.translation()*sumWeight + coords[i].translation()*weights[i])/(sumWeight+weights[i])).eval();
-      midCoords.linear() = mathutil::slerp(Eigen::AngleAxisd(midCoords.linear()), Eigen::AngleAxisd(coords[i].linear()),(weights[i]/(sumWeight+weights[i]))).toRotationMatrix();
-      //midCoords.linear() = Eigen::Quaterniond(midCoords.linear()).slerp(weights[i]/(sumWeight+weights[i]),Eigen::Quaterniond(coords[i].linear())).toRotationMatrix(); // quaternionのslerpは、90度回転した姿勢で不自然な遠回り補間をするので使ってはならない
+      midCoords.rotation() = mathutil::slerp(Eigen::AngleAxisd(midCoords.rotation()), Eigen::AngleAxisd(coords[i].rotation()),(weights[i]/(sumWeight+weights[i]))).toRotationMatrix();
+      //midCoords.rotation() = Eigen::Quaterniond(midCoords.rotation()).slerp(weights[i]/(sumWeight+weights[i]),Eigen::Quaterniond(coords[i].rotation())).toRotationMatrix(); // quaternionのslerpは、90度回転した姿勢で不自然な遠回り補間をするので使ってはならない
       sumWeight += weights[i];
     }
     return midCoords;

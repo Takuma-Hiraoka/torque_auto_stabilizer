@@ -3,6 +3,8 @@
 
 bool ActToGenFrameConverter::convertFrame(const GaitParam& gaitParam, const pinocchio::Model& model, double dt, // input
                                           pinocchio::Data& actRobot, std::vector<pinocchio::SE3>& o_actEEPose, std::vector<Eigen::Vector6d>& o_actFSensorWrench, mathutil::FirstOrderLowPassFilter<Eigen::Vector3d>& o_actCogVel) const {
+
+  // Dataはroot pos(3)、root quarternion(4)、joint angles
   Eigen::Vector3d actCogPrev = pinocchio::centerOfMass(model, actRobot, false); // 各リンクの重心は使わない．
 
   {
@@ -24,6 +26,8 @@ bool ActToGenFrameConverter::convertFrame(const GaitParam& gaitParam, const pino
     pinocchio::SE3 genFootMidCoords = mathutil::calcMidCoords(std::vector<pinocchio::SE3>{gaitParam.eeTargetPose[RLEG], gaitParam.eeTargetPose[LLEG]},
                                                                std::vector<double>{rlegweight, llegweight});  // 1周期前のeeTargetPoseを使っているが、eeTargetPoseは不連続に変化するものではないのでよい
     pinocchio::SE3 genFootOriginCoords = mathutil::orientCoordToAxis(genFootMidCoords, Eigen::Vector3d::UnitZ());
+
+    // 変換
     pinocchio::SE3 transform = genFootMidCoords*actFootMidCoords.inverse();
     Eigen::Vector3d pos = actRobotPosOffset.segment(0,3);
     pinocchio::SE3 rootT = transform * pinocchio::SE3(qOffset,pos);
