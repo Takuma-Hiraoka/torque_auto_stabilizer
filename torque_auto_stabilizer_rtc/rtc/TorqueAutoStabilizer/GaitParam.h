@@ -94,7 +94,7 @@ public:
       footStepNodesList[0]のendRefZmpStateは変更されない.
       footStepNodesList[0]のendRefZmpStateは、isStatic()である場合を除いて変更されない.
     */
-    std::vector<pinocchio::SE3> dstCoords = std::vector<pinocchio::SE3>(NUM_LEGS); // 要素数2. rleg: 0. lleg: 1. generate frame.
+    std::vector<pinocchio::SE3> dstCoords = std::vector<pinocchio::SE3>(NUM_LEGS, pinocchio::SE3::Identity()); // 要素数2. rleg: 0. lleg: 1. generate frame.
     std::vector<bool> isSupportPhase = std::vector<bool>(NUM_LEGS, true); // 要素数2. rleg: 0. lleg: 1. footStepNodesListの末尾の要素が両方falseであることは無い
     double remainTime = 0.0;
     enum class refZmpState_enum{RLEG, LLEG, MIDDLE};
@@ -109,8 +109,8 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
   std::vector<FootStepNodes> footStepNodesList = std::vector<FootStepNodes>(1); // 要素数1以上. 0番目が現在の状態. 末尾の要素以降は、末尾の状態がずっと続くとして扱われる.
-  std::vector<pinocchio::SE3> srcCoords = std::vector<pinocchio::SE3>(NUM_LEGS); // 要素数2. rleg: 0. lleg: 1. generate frame. 現在のfootstep開始時のgenCoords
-  std::vector<pinocchio::SE3> dstCoordsOrg = std::vector<pinocchio::SE3>(NUM_LEGS); // 要素数2. rleg: 0. lleg: 1. generate frame. 現在のfootstep開始時のdstCoords
+  std::vector<pinocchio::SE3> srcCoords = std::vector<pinocchio::SE3>(NUM_LEGS, pinocchio::SE3::Identity()); // 要素数2. rleg: 0. lleg: 1. generate frame. 現在のfootstep開始時のgenCoords
+  std::vector<pinocchio::SE3> dstCoordsOrg = std::vector<pinocchio::SE3>(NUM_LEGS, pinocchio::SE3::Identity()); // 要素数2. rleg: 0. lleg: 1. generate frame. 現在のfootstep開始時のdstCoords
   double remainTimeOrg = 0.0; // 現在のfootstep開始時のremainTime
   enum SwingState_enum{LIFT_PHASE, SWING_PHASE, DOWN_PHASE};
   std::vector<SwingState_enum> swingState = std::vector<SwingState_enum>(NUM_LEGS,LIFT_PHASE); // 要素数2. rleg: 0. lleg: 0. isSupportPhase = falseの脚は、footstep開始時はLIFT_PHASEで、LIFT_PHASE->SWING_PHASE->DOWN_PHASEと遷移する. 一度DOWN_PHASEになったら次のfootstepが始まるまで別のPHASEになることはない. DOWN_PHASEのときはfootStepNodesList[0]のdstCoordsはgenCoordsよりも高い位置に変更されることはない. isSupportPhase = trueの脚は、swingStateは参照されない(常にLIFT_PHASEとなる).
@@ -163,12 +163,12 @@ public:
     eeName.push_back(name_);
     eeParentLink.push_back(parentLink_);
     eeLocalT.push_back(localT_);
-    actEEPose.push_back(pinocchio::SE3());
-    refEEPose.push_back(pinocchio::SE3());
+    actEEPose.push_back(pinocchio::SE3::Identity());
+    refEEPose.push_back(pinocchio::SE3::Identity());
     refEEWrench.push_back(Eigen::Vector6d::Zero());
     refEEWrenchOrigin.push_back(Eigen::Vector6d::Zero());
     refEEPoseRaw.push_back(mathutil::TwoPointInterpolatorSE3(pinocchio::SE3::Identity(), Eigen::Vector6d::Zero(),Eigen::Vector6d::Zero(), mathutil::HOFFARBIB));
-    eeTargetPose.push_back(pinocchio::SE3());
+    eeTargetPose.push_back(pinocchio::SE3::Identity());
   }
 
   void initImu(const std::string& parentLink_, const pinocchio::SE3& localT_){

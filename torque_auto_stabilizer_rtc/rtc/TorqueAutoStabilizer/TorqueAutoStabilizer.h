@@ -50,12 +50,23 @@ protected:
   RTC::OutPort<RTC::TimedDoubleSeq> m_qOut_;
   RTC::TimedDoubleSeq m_tau_;
   RTC::OutPort<RTC::TimedDoubleSeq> m_tauOut_;
+  std::vector<RTC::TimedPose3D> m_actEEPose_; // Generate World frame. 要素数及び順番はgaitParam_.eeNameと同じ
+  std::vector<std::unique_ptr<RTC::OutPort<RTC::TimedPose3D> > > m_actEEPoseOut_;
   std::vector<RTC::TimedDoubleSeq> m_actEEWrench_; // Generate World frame. EndEffector origin. 要素数及び順番はgaitParam_.eeNameと同じ. ロボットが受ける力
   std::vector<std::unique_ptr<RTC::OutPort<RTC::TimedDoubleSeq> > > m_actEEWrenchOut_;
+  RTC::TimedPoint3D m_actCog_; // Generate World frame
+  RTC::OutPort<RTC::TimedPoint3D> m_actCogOut_; // for log
+  RTC::TimedPoint3D m_actDcm_; // Generate World frame
+  RTC::OutPort<RTC::TimedPoint3D> m_actDcmOut_; // for log
+  RTC::TimedDoubleSeq m_dstLandingPos_; // Generate World frame
+  RTC::OutPort<RTC::TimedDoubleSeq> m_dstLandingPosOut_; // for log
+  RTC::TimedDoubleSeq m_remainTime_;
+  RTC::OutPort<RTC::TimedDoubleSeq> m_remainTimeOut_; // for log
+  RTC::TimedDoubleSeq m_genCoords_;
+  RTC::OutPort<RTC::TimedDoubleSeq> m_genCoordsOut_; // for log
 
   TorqueAutoStabilizerService_impl m_service0_;
   RTC::CorbaPort m_torqueAutoStabilizerServicePort_;
-
 public:
   TorqueAutoStabilizer(RTC::Manager* manager);
   virtual RTC::ReturnCode_t onInitialize();

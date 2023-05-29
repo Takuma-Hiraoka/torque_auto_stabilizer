@@ -9,7 +9,7 @@ bool RefToGenFrameConverter::initFootCoords(const GaitParam& gaitParam, const pi
   // footMidCoordsとrefRobotのfootOrigin座標系が一致するようにrefRobotを変換し、その両足先をfootstepNodeのはじめにする。
 
   pinocchio::forwardKinematics(model,refRobot,gaitParam.refRobotPos);
-  pinocchio::SE3 footMidCoords;
+  pinocchio::SE3 footMidCoords = pinocchio::SE3::Identity();
   pinocchio::SE3 refrleg = refRobot.oMi[model.getJointId(gaitParam.eeParentLink[RLEG])]*gaitParam.eeLocalT[RLEG];
   pinocchio::SE3 reflleg = refRobot.oMi[model.getJointId(gaitParam.eeParentLink[LLEG])]*gaitParam.eeLocalT[LLEG];
   pinocchio::SE3 refFootMidCoords = mathutil::calcMidCoords(std::vector<pinocchio::SE3>{refrleg, reflleg},
@@ -31,7 +31,7 @@ bool RefToGenFrameConverter::initFootCoords(const GaitParam& gaitParam, const pi
   pinocchio::SE3 rlegCoords = refRobot.oMi[model.getJointId(gaitParam.eeParentLink[RLEG])]*gaitParam.eeLocalT[RLEG];
   pinocchio::SE3 llegCoords = refRobot.oMi[model.getJointId(gaitParam.eeParentLink[LLEG])]*gaitParam.eeLocalT[LLEG];
   footStepNodesList[0].dstCoords = {rlegCoords, llegCoords};
-  footStepNodesList[0].isSupportPhase = {true,true}; //TODO
+  footStepNodesList[0].isSupportPhase = {true,true};
   footStepNodesList[0].remainTime = 0.0;
   if(footStepNodesList[0].isSupportPhase[RLEG] && !footStepNodesList[0].isSupportPhase[LLEG]) footStepNodesList[0].endRefZmpState = GaitParam::FootStepNodes::refZmpState_enum::RLEG;
   else if(!footStepNodesList[0].isSupportPhase[RLEG] && footStepNodesList[0].isSupportPhase[LLEG]) footStepNodesList[0].endRefZmpState = GaitParam::FootStepNodes::refZmpState_enum::LLEG;

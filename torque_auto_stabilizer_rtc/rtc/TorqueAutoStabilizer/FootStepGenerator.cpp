@@ -221,7 +221,7 @@ bool FootStepGenerator::goStop(const GaitParam& gaitParam,
 }
 
 // FootStepNodesListをdtすすめる
-bool FootStepGenerator::procFootStepNodesList(const GaitParam& gaitParam, const double& dt, bool useActState,
+bool FootStepGenerator::procFootStepNodesList(const GaitParam& gaitParam, const double& dt,
                                               std::vector<GaitParam::FootStepNodes>& o_footStepNodesList, std::vector<pinocchio::SE3>& o_srcCoords, std::vector<pinocchio::SE3>& o_dstCoordsOrg, double& o_remainTimeOrg, std::vector<GaitParam::SwingState_enum>& o_swingState, double& o_elapsedTime, std::vector<bool>& o_prevSupportPhase, double& relLandingHeight) const{
   std::vector<GaitParam::FootStepNodes> footStepNodesList = gaitParam.footStepNodesList;
   std::vector<bool> prevSupportPhase = gaitParam.prevSupportPhase;
@@ -231,10 +231,8 @@ bool FootStepGenerator::procFootStepNodesList(const GaitParam& gaitParam, const 
   double remainTimeOrg = gaitParam.remainTimeOrg;
   std::vector<GaitParam::SwingState_enum> swingState = gaitParam.swingState;
 
-  if(useActState){
-    // 早づきしたらremainTimeにかかわらずすぐに次のnodeへ移る(remainTimeをdtにする). この機能が無いと少しでもロボットが傾いて早づきするとジャンプするような挙動になる.
-    this->checkEarlyTouchDown(footStepNodesList, gaitParam, dt);
-  }
+  // 早づきしたらremainTimeにかかわらずすぐに次のnodeへ移る(remainTimeをdtにする). この機能が無いと少しでもロボットが傾いて早づきするとジャンプするような挙動になる.
+  this->checkEarlyTouchDown(footStepNodesList, gaitParam, dt);
 
   // footStepNodesListを進める
   footStepNodesList[0].remainTime = std::max(0.0, footStepNodesList[0].remainTime - dt);
@@ -242,7 +240,7 @@ bool FootStepGenerator::procFootStepNodesList(const GaitParam& gaitParam, const 
   for(int i=0;i<NUM_LEGS;i++) prevSupportPhase[i] = footStepNodesList[0].isSupportPhase[i];
 
   if(footStepNodesList[0].remainTime <= 0.0 && footStepNodesList.size() > 1){ // 次のfootStepNodesListのindexに移る.
-    if(this->isModifyFootSteps && this->isStableGoStopMode && useActState){
+    if(this->isModifyFootSteps && this->isStableGoStopMode){
       // footStepNodesList[0]で着地位置修正を行っていたら、footStepNodesListがemergencyStepNumのサイズになるまで歩くnodeが末尾に入る.
       this->checkStableGoStop(footStepNodesList, gaitParam);
     }
@@ -263,7 +261,7 @@ bool FootStepGenerator::procFootStepNodesList(const GaitParam& gaitParam, const 
   return true;
 }
 
-bool FootStepGenerator::calcFootSteps(const GaitParam& gaitParam, const double& dt, bool useActState,
+bool FootStepGenerator::calcFootSteps(const GaitParam& gaitParam, const double& dt,
                                       GaitParam::DebugData& debugData, //for Log
                                       std::vector<GaitParam::FootStepNodes>& o_footStepNodesList) const{
   std::vector<GaitParam::FootStepNodes> footStepNodesList = gaitParam.footStepNodesList;
@@ -282,14 +280,12 @@ bool FootStepGenerator::calcFootSteps(const GaitParam& gaitParam, const double& 
     }
   }
 
-  if(useActState){
-    if(this->isModifyFootSteps && this->isEmergencyStepMode){
-      this->checkEmergencyStep(footStepNodesList, gaitParam);
-    }
+  if(this->isModifyFootSteps && this->isEmergencyStepMode){
+    this->checkEmergencyStep(footStepNodesList, gaitParam);
+  }
 
-    if(this->isModifyFootSteps){
-      this->modifyFootSteps(footStepNodesList, debugData, gaitParam);
-    }
+  if(this->isModifyFootSteps){
+    this->modifyFootSteps(footStepNodesList, debugData, gaitParam);
   }
 
   o_footStepNodesList = footStepNodesList;
@@ -308,20 +304,21 @@ bool FootStepGenerator::goNextFootStepNodesList(const GaitParam& gaitParam, doub
   // しかし、あまりにもずれが大きい場合は、遷移速度が無視できないほど大きくなるので、将来のstepの位置姿勢をgenCoordsにあわせてずらした方がよい
   // 触覚を精度良く利用したければ、「指令関節角度」という概念を使うのをやめて、actual angleに基づく手法に変えるべきかと
   // 基本的に、環境の地形は、触覚からは取得せず、視覚から取得する方針. 転倒等でロボットの身体が大きく傾いてearly touch down, late touch downした場合にのみ、やむを得ず触覚に基づいてずらす、という扱い.
+  // 以上は関節角度制御時代の話、関節トルク制御でgenCoordsではなくactEEPoseを使う。
 
   //   footStepNodesList[1:]で一回でも遊脚になった以降は、位置とYawをずらす. footStepNodesList[1:]で最初に遊脚になる脚があるならその反対の脚の偏差にあわせてずらす. そうでないなら両脚の中心(+-defaultTranslatePos)の偏差にあわせてずらす
   //   footStepNodesList[1]が支持脚なら、遊脚になるまで、位置姿勢をその足の今の偏差にあわせてずらす.
   for(int i=1;i<footStepNodesList.size();i++){
     if(footStepNodesList[i].isSupportPhase[RLEG] && !footStepNodesList[i].isSupportPhase[LLEG]){ // LLEGが次に最初に遊脚になる
       pinocchio::SE3 origin = mathutil::orientCoordToAxis(footStepNodesList[i-1].dstCoords[RLEG], Eigen::Vector3d::UnitZ()); // generate frame. 一つ前のRLEGの位置を基準にずらす
-      pinocchio::SE3 offsetedPos = mathutil::orientCoordToAxis(gaitParam.genCoords[RLEG].value() * footStepNodesList[0].dstCoords[RLEG].inverse() * footStepNodesList[i-1].dstCoords[RLEG], Eigen::Vector3d::UnitZ()); // generate frame. 一つ前のRLEGはこの位置にずれている
+      pinocchio::SE3 offsetedPos = mathutil::orientCoordToAxis(gaitParam.actEEPose[RLEG] * footStepNodesList[0].dstCoords[RLEG].inverse() * footStepNodesList[i-1].dstCoords[RLEG], Eigen::Vector3d::UnitZ()); // generate frame. 一つ前のRLEGはこの位置にずれている
       pinocchio::SE3 transform = offsetedPos * origin.inverse(); // generate frame
       if(transform.translation().norm() < this->contactModificationThreshold) transform = pinocchio::SE3::Identity(); // ズレが大きい場合のみずらす
       this->transformFutureSteps(footStepNodesList, i, transform); // footStepNodesList[1:]で一回でも遊脚になった以降の脚の、位置とYawをずらす
       break;
     }else if(footStepNodesList[i].isSupportPhase[LLEG] && !footStepNodesList[i].isSupportPhase[RLEG]){ // RLEGが次に最初に遊脚になる
       pinocchio::SE3 origin = mathutil::orientCoordToAxis(footStepNodesList[i-1].dstCoords[LLEG], Eigen::Vector3d::UnitZ()); // generate frame. 一つ前のLLEGの位置を基準にずらす
-      pinocchio::SE3 offsetedPos = mathutil::orientCoordToAxis(gaitParam.genCoords[LLEG].value() * footStepNodesList[0].dstCoords[LLEG].inverse() * footStepNodesList[i-1].dstCoords[LLEG], Eigen::Vector3d::UnitZ()); // generate frame. 一つ前のLLEGはこの位置にずれている
+      pinocchio::SE3 offsetedPos = mathutil::orientCoordToAxis(gaitParam.actEEPose[LLEG] * footStepNodesList[0].dstCoords[LLEG].inverse() * footStepNodesList[i-1].dstCoords[LLEG], Eigen::Vector3d::UnitZ()); // generate frame. 一つ前のLLEGはこの位置にずれている
       pinocchio::SE3 transform = offsetedPos * origin.inverse(); // generate frame
       if(transform.translation().norm() < this->contactModificationThreshold) transform = pinocchio::SE3::Identity(); // ズレが大きい場合のみずらす
       this->transformFutureSteps(footStepNodesList, i, transform); // footStepNodesList[1:]で一回でも遊脚になった以降の脚の、位置とYawをずらす
@@ -332,9 +329,9 @@ bool FootStepGenerator::goNextFootStepNodesList(const GaitParam& gaitParam, doub
       pinocchio::SE3 lleg = footStepNodesList[i-1].dstCoords[LLEG];
       lleg.translation() -= lleg.rotation() * gaitParam.defaultTranslatePos[LLEG].value();
       pinocchio::SE3 origin = mathutil::orientCoordToAxis(mathutil::calcMidCoords({rleg, lleg}, {1.0, 1.0}), Eigen::Vector3d::UnitZ()); // 一つ前の両脚の中心の位置を基準にずらす
-      pinocchio::SE3 offseted_rleg = gaitParam.genCoords[RLEG].value() * footStepNodesList[0].dstCoords[RLEG].inverse() * footStepNodesList[i-1].dstCoords[RLEG]; // generate frame
+      pinocchio::SE3 offseted_rleg = gaitParam.actEEPose[RLEG] * footStepNodesList[0].dstCoords[RLEG].inverse() * footStepNodesList[i-1].dstCoords[RLEG]; // generate frame
       offseted_rleg.translation() -= rleg.rotation() * gaitParam.defaultTranslatePos[RLEG].value();
-      pinocchio::SE3 offseted_lleg = gaitParam.genCoords[LLEG].value() * footStepNodesList[0].dstCoords[LLEG].inverse() * footStepNodesList[i-1].dstCoords[LLEG];
+      pinocchio::SE3 offseted_lleg = gaitParam.actEEPose[LLEG] * footStepNodesList[0].dstCoords[LLEG].inverse() * footStepNodesList[i-1].dstCoords[LLEG];
       offseted_lleg.translation() -= lleg.rotation() * gaitParam.defaultTranslatePos[LLEG].value();
       pinocchio::SE3 offsetedPos = mathutil::orientCoordToAxis(mathutil::calcMidCoords({offseted_rleg, offseted_lleg}, {1.0, 1.0}), Eigen::Vector3d::UnitZ());
       pinocchio::SE3 transform = offsetedPos * origin.inverse(); // generate frame
@@ -345,7 +342,7 @@ bool FootStepGenerator::goNextFootStepNodesList(const GaitParam& gaitParam, doub
   }
   for(int i=0;i<NUM_LEGS;i++){
     if(footStepNodesList[1].isSupportPhase[i]){
-      pinocchio::SE3 transform = gaitParam.genCoords[i].value() * footStepNodesList[0].dstCoords[i].inverse(); // generate frame
+      pinocchio::SE3 transform = gaitParam.actEEPose[i] * footStepNodesList[0].dstCoords[i].inverse(); // generate frame
       if(transform.translation().norm() < this->contactModificationThreshold) transform = pinocchio::SE3::Identity(); // ズレが大きい場合のみずらす
       this->transformCurrentSupportSteps(i, footStepNodesList, 1, transform); // 遊脚になるまで、位置姿勢をその足の今の偏差にあわせてずらす.
     }
@@ -354,7 +351,7 @@ bool FootStepGenerator::goNextFootStepNodesList(const GaitParam& gaitParam, doub
   // footStepNodesListをpop front
   footStepNodesList.erase(footStepNodesList.begin()); // vectorではなくlistにするべきかもしれないが、要素数がそんなに大きくないのでよしとする
   for(int i=0;i<NUM_LEGS;i++) {
-    srcCoords[i] = gaitParam.genCoords[i].value();
+    srcCoords[i] = gaitParam.actEEPose[i];
     dstCoordsOrg[i] = footStepNodesList[0].dstCoords[i];
     swingState[i] = GaitParam::LIFT_PHASE;
   }
@@ -517,8 +514,8 @@ void FootStepGenerator::modifyFootSteps(std::vector<GaitParam::FootStepNodes>& f
   // one step capturabilityに基づき、footStepNodesList[0]のremainTimeとdstCoordsを修正する.
   int swingLeg = footStepNodesList[0].isSupportPhase[RLEG] ? LLEG : RLEG;
   int supportLeg = (swingLeg == RLEG) ? LLEG : RLEG;
-  pinocchio::SE3 swingPose = gaitParam.genCoords[swingLeg].value();
-  pinocchio::SE3 supportPose = gaitParam.genCoords[supportLeg].value(); // TODO. actを使う
+  pinocchio::SE3 swingPose = gaitParam.actEEPose[swingLeg];
+  pinocchio::SE3 supportPose = gaitParam.actEEPose[supportLeg];
   pinocchio::SE3 supportPoseHorizontal = mathutil::orientCoordToAxis(supportPose, Eigen::Vector3d::UnitZ());
 
   // stopCurrentPositionが発動しているなら、着地位置時間修正を行っても無駄なので行わない
@@ -612,7 +609,7 @@ void FootStepGenerator::modifyFootSteps(std::vector<GaitParam::FootStepNodes>& f
     for(int i=0;i<candidates.size();i++){
       for(int j=0;j<steppableHulls.size();j++){
         // overwritableMaxGroundZVelocityを満たさないregionは除外
-        if(std::abs(steppableHulls[j].second - gaitParam.genCoords[swingLeg].getGoal().translation()[2]) > 0.2 && candidates[i].second < 0.8) continue; // TODO
+        if(std::abs(steppableHulls[j].second - gaitParam.actEEPose[swingLeg].translation()[2]) > 0.2 && candidates[i].second < 0.8) continue; // TODO
         if(std::abs(steppableHulls[j].second - gaitParam.srcCoords[swingLeg].translation()[2]) > (gaitParam.elapsedTime + candidates[i].second) * this->overwritableMaxSrcGroundZVelocity) continue;
         std::vector<Eigen::Vector3d> hull = mathutil::calcIntersectConvexHull(candidates[i].first, steppableHulls[j].first);
         if(hull.size() > 0) nextCandidates.emplace_back(hull, candidates[i].second);

@@ -16,6 +16,12 @@ TorqueAutoStabilizer::TorqueAutoStabilizer(RTC::Manager* manager):
   m_tauActIn_("tauActIn", m_tauAct_),
   m_qOut_("q", m_q_),
   m_tauOut_("tauOut", m_tau_),
+  m_actCogOut_("actCogOut", m_actCog_),
+  m_actDcmOut_("actDcmOut", m_actDcm_),
+  m_dstLandingPosOut_("dstLandingPosOut", m_dstLandingPos_),
+  m_remainTimeOut_("remainTimeOut", m_remainTime_),
+  m_genCoordsOut_("genCoordsOut", m_genCoords_),
+
   m_torqueAutoStabilizerServicePort_("TorqueAutoStabilizerService")
 {
   this->m_service0_.setComp(this);
@@ -32,6 +38,12 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
   addInPort("tauActIn", this->m_tauActIn_);
   addOutPort("q", this->m_qOut_);
   addOutPort("tauOut", this->m_tauOut_);
+  addOutPort("actCogOut", this->m_actCogOut_);
+  addOutPort("actDcmOut", this->m_actDcmOut_);
+  addOutPort("dstLandingPosOut", this->m_dstLandingPosOut_);
+  addOutPort("remainTimeOut", this->m_remainTimeOut_);
+  addOutPort("genCoordsOut", this->m_genCoordsOut_);
+
   this->m_torqueAutoStabilizerServicePort_.registerProvider("service0", "TorqueAutoStabilizerService", this->m_service0_);
   addPort(this->m_torqueAutoStabilizerServicePort_);
 
@@ -235,6 +247,15 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
       this->addInPort(name.c_str(), *(this->m_actWrenchIn_[i]));
     }
 
+    // 各EndEffectorにつき、act<name>PoseOutというOutPortをつくる
+    this->m_actEEPoseOut_.resize(this->gaitParam_.eeName.size());
+    this->m_actEEPose_.resize(this->gaitParam_.eeName.size());
+    for(int i=0;i<this->gaitParam_.eeName.size();i++){
+      std::string name = "act"+this->gaitParam_.eeName[i]+"PoseOut";
+      this->m_actEEPoseOut_[i] = std::make_unique<RTC::OutPort<RTC::TimedPose3D> >(name.c_str(), this->m_actEEPose_[i]);
+      this->addOutPort(name.c_str(), *(this->m_actEEPoseOut_[i]));
+    }
+
     // 各EndEffectorにつき、act<name>WrenchOutというOutPortをつくる
     this->m_actEEWrenchOut_.resize(this->gaitParam_.eeName.size());
     this->m_actEEWrench_.resize(this->gaitParam_.eeName.size());
@@ -333,6 +354,12 @@ bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::Contro
   actToGenFrameConverter.convertFrame(gaitParam, model, dt,
                                       gaitParam.actRobot, gaitParam.actEEPose, gaitParam.actFSensorWrench, gaitParam.actCogVel, gaitParam.actCog);
   refToGenFrameConverter.convertFrame(gaitParam, model, dt, gaitParam.actRobot, gaitParam.refRobot, gaitParam.refEEPose, gaitParam.refEEWrench, gaitParam.refdz, gaitParam.footMidCoords);
+
+  footStepGenerator.procFootStepNodesList(gaitParam, dt,
+                                          gaitParam.footStepNodesList, gaitParam.srcCoords, gaitParam.dstCoordsOrg, gaitParam.remainTimeOrg, gaitParam.swingState, gaitParam.elapsedTime, gaitParam.prevSupportPhase, gaitParam.relLandingHeight);
+  footStepGenerator.calcFootSteps(gaitParam, dt,
+                                  gaitParam.debugData, //for log
+                                  gaitParam.footStepNodesList);
   return true;
 }
 
@@ -357,13 +384,60 @@ bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
   }
 
   if(this->mode_.isASTRunning()){
+    for(int i=0;i<gaitParam.eeName.size();i++){
+      this->m_actEEPose_[i].tm = this->m_qRef_.tm;
+      this->m_actEEPose_[i].data.position.x = gaitParam.actEEPose[i].translation()[0];
+      this->m_actEEPose_[i].data.position.y = gaitParam.actEEPose[i].translation()[1];
+      this->m_actEEPose_[i].data.position.z = gaitParam.actEEPose[i].translation()[2];
+      Eigen::Vector3d rpy = mathutil::rpyFromRot(gaitParam.actEEPose[i].rotation());
+      this->m_actEEPose_[i].data.orientation.r = rpy[0];
+      this->m_actEEPose_[i].data.orientation.p = rpy[1];
+      this->m_actEEPose_[i].data.orientation.y = rpy[2];
+      this->m_actEEPoseOut_[i]->write();
+    }
+
     for(int i=0;i<gaitParam.fsensorName.size();i++){
       this->m_actEEWrench_[i].tm = this->m_qRef_.tm;
       this->m_actEEWrench_[i].data.length(6);
       for(int j=0;j<6;j++) this->m_actEEWrench_[i].data[j] = gaitParam.actFSensorWrench[i][j];
       this->m_actEEWrenchOut_[i]->write();
     }
+
+    this->m_actCog_.tm = this->m_qRef_.tm;
+    this->m_actCog_.data.x = gaitParam.actCog[0];
+    this->m_actCog_.data.y = gaitParam.actCog[1];
+    this->m_actCog_.data.z = gaitParam.actCog[2];
+    this->m_actCogOut_.write();
+    Eigen::Vector3d actDcm = gaitParam.actCog + gaitParam.actCogVel.value() / gaitParam.omega;
+    this->m_actDcm_.tm = this->m_qRef_.tm;
+    this->m_actDcm_.data.x = actDcm[0];
+    this->m_actDcm_.data.y = actDcm[1];
+    this->m_actDcm_.data.z = actDcm[2];
+    this->m_actDcmOut_.write();
+    this->m_dstLandingPos_.tm = this->m_qRef_.tm;
+    this->m_dstLandingPos_.data.length(6);
+    this->m_dstLandingPos_.data[0] = gaitParam.footStepNodesList[0].dstCoords[RLEG].translation()[0];
+    this->m_dstLandingPos_.data[1] = gaitParam.footStepNodesList[0].dstCoords[RLEG].translation()[1];
+    this->m_dstLandingPos_.data[2] = gaitParam.footStepNodesList[0].dstCoords[RLEG].translation()[2];
+    this->m_dstLandingPos_.data[3] = gaitParam.footStepNodesList[0].dstCoords[LLEG].translation()[0];
+    this->m_dstLandingPos_.data[4] = gaitParam.footStepNodesList[0].dstCoords[LLEG].translation()[1];
+    this->m_dstLandingPos_.data[5] = gaitParam.footStepNodesList[0].dstCoords[LLEG].translation()[2];
+    this->m_dstLandingPosOut_.write();
+    this->m_remainTime_.tm = this->m_qRef_.tm;
+    this->m_remainTime_.data.length(1);
+    this->m_remainTime_.data[0] = gaitParam.footStepNodesList[0].remainTime;
+    this->m_remainTimeOut_.write();
+    this->m_genCoords_.tm = this->m_qRef_.tm;
+    this->m_genCoords_.data.length(12);
+    for (int i=0; i<3; i++) {
+      this->m_genCoords_.data[0+i] = gaitParam.genCoords[RLEG].value().translation()[i];
+      this->m_genCoords_.data[3+i] = gaitParam.genCoords[LLEG].value().translation()[i];
+      this->m_genCoords_.data[6+i] = gaitParam.genCoords[RLEG].getGoal().translation()[i];
+      this->m_genCoords_.data[9+i] = gaitParam.genCoords[LLEG].getGoal().translation()[i];
+    }
+    this->m_genCoordsOut_.write();
   }
+
 }
 
 RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){

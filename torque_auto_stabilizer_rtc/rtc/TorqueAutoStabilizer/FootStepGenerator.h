@@ -107,7 +107,7 @@ public:
                     std::vector<GaitParam::FootStepNodes>& o_footStepNodesList) const;
 
   // FootStepNodesListをdtすすめる
-  bool procFootStepNodesList(const GaitParam& gaitParam, const double& dt, bool useActState,
+  bool procFootStepNodesList(const GaitParam& gaitParam, const double& dt,
                              std::vector<GaitParam::FootStepNodes>& o_footStepNodesList, std::vector<pinocchio::SE3>& o_srcCoords, std::vector<pinocchio::SE3>& o_dstCoordsOrg, double& o_remainTimeOrg, std::vector<GaitParam::SwingState_enum>& o_swingState, double& o_elapsedTime, std::vector<bool>& o_prevSupportPhase, double& relLandingHeight) const;
 
   /*
@@ -120,7 +120,7 @@ public:
     modifyFootStepsなら、footStepNodesList[0]の現在のdstCoordsのままだとバランスが取れないか、今swing期でfootStepNodesList[0]終了時に着地する予定の要素のdstCoordsが着地可能領域上にないなら、footStepNodesList[0]の、今swing期でfootStepNodesList[0]終了時に着地する予定の要素を修正する. また、それ以降一回でもswingする要素の位置を平行移動する
 
   */
-  bool calcFootSteps(const GaitParam& gaitParam, const double& dt, bool useActState,
+  bool calcFootSteps(const GaitParam& gaitParam, const double& dt,
                      GaitParam::DebugData& debugData, //for Log
                      std::vector<GaitParam::FootStepNodes>& o_footStepNodesList) const;
 
