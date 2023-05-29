@@ -16,6 +16,7 @@ TorqueAutoStabilizer::TorqueAutoStabilizer(RTC::Manager* manager):
   m_tauActIn_("tauActIn", m_tauAct_),
   m_qOut_("q", m_q_),
   m_tauOut_("tauOut", m_tau_),
+  m_genZmpOut_("genZmpOut", m_genZmp_),
   m_actCogOut_("actCogOut", m_actCog_),
   m_actDcmOut_("actDcmOut", m_actDcm_),
   m_dstLandingPosOut_("dstLandingPosOut", m_dstLandingPos_),
@@ -38,6 +39,7 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
   addInPort("tauActIn", this->m_tauActIn_);
   addOutPort("q", this->m_qOut_);
   addOutPort("tauOut", this->m_tauOut_);
+  addOutPort("genZmpOut", this->m_genZmpOut_);
   addOutPort("actCogOut", this->m_actCogOut_);
   addOutPort("actDcmOut", this->m_actDcmOut_);
   addOutPort("dstLandingPosOut", this->m_dstLandingPosOut_);
@@ -417,6 +419,11 @@ bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
       this->m_actEEWrenchOut_[i]->write();
     }
 
+    this->m_genZmp_.tm = this->m_qRef_.tm;
+    this->m_genZmp_.data.x = gaitParam.refZmpTraj[0].getStart()[0];
+    this->m_genZmp_.data.y = gaitParam.refZmpTraj[0].getStart()[1];
+    this->m_genZmp_.data.z = gaitParam.refZmpTraj[0].getStart()[2];
+    this->m_genZmpOut_.write();
     this->m_actCog_.tm = this->m_qRef_.tm;
     this->m_actCog_.data.x = gaitParam.actCog[0];
     this->m_actCog_.data.y = gaitParam.actCog[1];
