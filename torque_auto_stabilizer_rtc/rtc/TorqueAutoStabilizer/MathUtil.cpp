@@ -87,6 +87,20 @@ namespace mathutil
     return Eigen::AngleAxisd(M1 * Eigen::AngleAxisd(trans.angle() * r, trans.axis()));
   }
 
+  Eigen::Matrix3d calcMidRot(const std::vector<Eigen::Matrix3d>& coords, const std::vector<double>& weights){
+    // coordsとweightsのサイズは同じでなければならない
+    double sumWeight = 0.0;
+    Eigen::AngleAxisd midrot = Eigen::AngleAxisd::Identity();
+
+    for(int i=0;i<coords.size();i++){
+      if(weights[i]<=0) continue;
+      midrot = mathutil::slerp(midrot, Eigen::AngleAxisd(coords[i]), weights[i]/(sumWeight+weights[i]));
+      //midrot = midrot.slerp(weights[i]/(sumWeight+weights[i]),Eigen::Quaterniond(coords[i])); // quaternionのslerpは、90度回転した姿勢で不自然な遠回り補間をするので使ってはならない
+      sumWeight += weights[i];
+    }
+    return midrot.toRotationMatrix();
+  }
+
   pinocchio::SE3 calcMidCoords(const std::vector<pinocchio::SE3>& coords, const std::vector<double>& weights){
     // coordsとweightsのサイズは同じでなければならない
     double sumWeight = 0.0;

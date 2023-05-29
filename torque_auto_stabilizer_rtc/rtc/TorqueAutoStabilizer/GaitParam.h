@@ -118,7 +118,7 @@ public:
   std::vector<bool> prevSupportPhase = std::vector<bool>{true, true}; // 要素数2. rleg: 0. lleg: 1. 一つ前の周期でSupportPhaseだったかどうか
 
   // LegCoordsGenerator
-  std::vector<mathutil::TwoPointInterpolatorSE3> genCoords = std::vector<mathutil::TwoPointInterpolatorSE3>(NUM_LEGS, mathutil::TwoPointInterpolatorSE3(pinocchio::SE3::Identity(),Eigen::Vector6d::Zero(),Eigen::Vector6d::Zero(),mathutil::HOFFARBIB)); // 要素数2. rleg: 0. lleg: 1. generate frame. 現在の位置
+  std::vector<mathutil::TwoPointInterpolatorSE3> genCoords = std::vector<mathutil::TwoPointInterpolatorSE3>(NUM_LEGS, mathutil::TwoPointInterpolatorSE3(pinocchio::SE3::Identity(),Eigen::Vector6d::Zero(),Eigen::Vector6d::Zero(),mathutil::HOFFARBIB)); // 要素数2. rleg: 0. lleg: 1. generate frame. 現在の目標位置
   std::vector<footguidedcontroller::LinearTrajectory<Eigen::Vector3d> > refZmpTraj = {footguidedcontroller::LinearTrajectory<Eigen::Vector3d>(Eigen::Vector3d::Zero(),Eigen::Vector3d::Zero(),0.0)}; // 要素数1以上. generate frame. footstepNodesListを単純に線形補間して計算される現在の目標zmp軌道
 
 

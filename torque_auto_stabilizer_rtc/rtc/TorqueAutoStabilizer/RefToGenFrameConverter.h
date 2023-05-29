@@ -36,7 +36,7 @@ public:
   // 原点にfootMidCoordsを置く．
   // footMidCoordsとrefRobotのfootOrigin座標系が一致するようにrefRobotを変換し、その両足先をfootstepNodeのはじめにする。
   bool initFootCoords(const GaitParam& gaitParam, const pinocchio::Model& model,// input
-                      mathutil::TwoPointInterpolatorSE3& o_footMidCoords, pinocchio::Data& refRobot, std::vector<GaitParam::FootStepNodes>& o_footStepNodeList) const; // output
+                      mathutil::TwoPointInterpolatorSE3& o_footMidCoords, pinocchio::Data& refRobot) const; // output
 
   // reference frameで表現されたrefRobotPosをgenerate frameに投影しrefRobotとし、各種reference値をgenerate frameに変換する
   bool convertFrame(const GaitParam& gaitParam, const pinocchio::Model& model, double dt, pinocchio::Data& actRobot, // input

@@ -2,11 +2,11 @@
 #include "pinocchio/algorithm/center-of-mass.hpp"
 
 bool RefToGenFrameConverter::initFootCoords(const GaitParam& gaitParam, const pinocchio::Model& model, // input
-                    mathutil::TwoPointInterpolatorSE3& o_footMidCoords, pinocchio::Data& refRobot, std::vector<GaitParam::FootStepNodes>& o_footStepNodeList) const{ // output
+                    mathutil::TwoPointInterpolatorSE3& o_footMidCoords, pinocchio::Data& refRobot) const{ // output
 
   // ロボット内座標系を初期化する．
   // 原点にfootMidCoordsを置く．
-  // footMidCoordsとrefRobotのfootOrigin座標系が一致するようにrefRobotを変換し、その両足先をfootstepNodeのはじめにする。
+  // footMidCoordsとrefRobotのfootOrigin座標系が一致するようにrefRobotを変換する
 
   pinocchio::forwardKinematics(model,refRobot,gaitParam.refRobotPos);
   pinocchio::SE3 footMidCoords = pinocchio::SE3::Identity();
@@ -27,18 +27,7 @@ bool RefToGenFrameConverter::initFootCoords(const GaitParam& gaitParam, const pi
   posForFootStepNode.segment(3,4) = qTransform.coeffs();
   pinocchio::forwardKinematics(model,refRobot,posForFootStepNode);
 
-  std::vector<GaitParam::FootStepNodes> footStepNodesList(1);
-  pinocchio::SE3 rlegCoords = refRobot.oMi[model.getJointId(gaitParam.eeParentLink[RLEG])]*gaitParam.eeLocalT[RLEG];
-  pinocchio::SE3 llegCoords = refRobot.oMi[model.getJointId(gaitParam.eeParentLink[LLEG])]*gaitParam.eeLocalT[LLEG];
-  footStepNodesList[0].dstCoords = {rlegCoords, llegCoords};
-  footStepNodesList[0].isSupportPhase = {true,true};
-  footStepNodesList[0].remainTime = 0.0;
-  if(footStepNodesList[0].isSupportPhase[RLEG] && !footStepNodesList[0].isSupportPhase[LLEG]) footStepNodesList[0].endRefZmpState = GaitParam::FootStepNodes::refZmpState_enum::RLEG;
-  else if(!footStepNodesList[0].isSupportPhase[RLEG] && footStepNodesList[0].isSupportPhase[LLEG]) footStepNodesList[0].endRefZmpState = GaitParam::FootStepNodes::refZmpState_enum::LLEG;
-  else footStepNodesList[0].endRefZmpState = GaitParam::FootStepNodes::refZmpState_enum::MIDDLE;
-
   o_footMidCoords.reset(footMidCoords);
-  o_footStepNodeList = footStepNodesList;
   return true;
 }
 

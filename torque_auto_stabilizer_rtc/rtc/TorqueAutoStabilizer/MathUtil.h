@@ -15,6 +15,9 @@ namespace mathutil
   pinocchio::SE3 orientCoordToAxis(const pinocchio::SE3& m, const Eigen::Vector3d& axis, const Eigen::Vector3d& localaxis = Eigen::Vector3d::UnitZ());
   Eigen::AngleAxisd slerp(const Eigen::AngleAxisd& M1, const Eigen::AngleAxisd& M2, double r);
 
+  // coordsとweightsのサイズは同じでなければならない
+  Eigen::Matrix3d calcMidRot(const std::vector<Eigen::Matrix3d>& coords, const std::vector<double>& weights);
+
   pinocchio::SE3 calcMidCoords(const std::vector<pinocchio::SE3>& coords, const std::vector<double>& weights);
 
   template<typename T>

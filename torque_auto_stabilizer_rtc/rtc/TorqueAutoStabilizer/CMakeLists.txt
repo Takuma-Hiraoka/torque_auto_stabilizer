@@ -17,6 +17,7 @@ rtmbuild_add_library(TorqueAutoStabilizer SHARED
   ActToGenFrameConverter.cpp
   RefToGenFrameConverter.cpp
   FootStepGenerator.cpp
+  LegCoordsGenerator.cpp
   )
 target_link_libraries(TorqueAutoStabilizer
   ${catkin_LIBRARIES}

@@ -16,8 +16,8 @@ bool ActToGenFrameConverter::convertFrame(const GaitParam& gaitParam, const pino
     actRobotPosOffset.segment(3,4) = qOffset.coeffs();
     pinocchio::forwardKinematics(model,actRobot,actRobotPosOffset);
     //TODO
-    double rlegweight = gaitParam.footstepNodesList[0].isSupportPhase[RLEG]? 1.0 : 0.0;
-    double llegweight = gaitParam.footstepNodesList[0].isSupportPhase[LLEG]? 1.0 : 0.0;
+    double rlegweight = gaitParam.footStepNodesList[0].isSupportPhase[RLEG]? 1.0 : 0.0;
+    double llegweight = gaitParam.footStepNodesList[0].isSupportPhase[LLEG]? 1.0 : 0.0;
     pinocchio::SE3 actrleg = actRobot.oMi[model.getJointId(gaitParam.eeParentLink[RLEG])]*gaitParam.eeLocalT[RLEG];
     pinocchio::SE3 actlleg = actRobot.oMi[model.getJointId(gaitParam.eeParentLink[LLEG])]*gaitParam.eeLocalT[LLEG];
     pinocchio::SE3 actFootMidCoords = mathutil::calcMidCoords(std::vector<pinocchio::SE3>{actrleg, actlleg},

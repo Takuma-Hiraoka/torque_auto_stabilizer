@@ -344,22 +344,36 @@ bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pino
   }
 }
 
-bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter, const RefToGenFrameConverter& refToGenFrameConverter, const FootStepGenerator& footStepGenerator) {
+bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter, const RefToGenFrameConverter& refToGenFrameConverter, const FootStepGenerator& footStepGenerator, const LegCoordsGenerator& legCoordsGenerator) {
   // FootOrigin座標系を用いてactRobotRawをgenerate frameに投影しactRobotとする
   if(mode.isSyncToASTInit()){
-    refToGenFrameConverter.initFootCoords(gaitParam, model, gaitParam.footMidCoords, gaitParam.refRobot, gaitParam.footStepNodesList);
+    refToGenFrameConverter.initFootCoords(gaitParam, model, gaitParam.footMidCoords, gaitParam.refRobot);
     footStepGenerator.initFootStepNodesList(gaitParam, model,
                                             gaitParam.footStepNodesList, gaitParam.srcCoords, gaitParam.dstCoordsOrg, gaitParam.remainTimeOrg, gaitParam.swingState, gaitParam.elapsedTime, gaitParam.prevSupportPhase);
+    legCoordsGenerator.initLegCoords(gaitParam,
+				     gaitParam.refZmpTraj, gaitParam.genCoords);
   }
+
+  // FootOrigin座標系を用いてactRobotPosをgenerate frameに投影しactRobotとする
   actToGenFrameConverter.convertFrame(gaitParam, model, dt,
                                       gaitParam.actRobot, gaitParam.actEEPose, gaitParam.actFSensorWrench, gaitParam.actCogVel, gaitParam.actCog);
+
+  // FootOrigin座標系を用いてrefRobotPosをgenerate frameに投影しrefRobotとする
   refToGenFrameConverter.convertFrame(gaitParam, model, dt, gaitParam.actRobot, gaitParam.refRobot, gaitParam.refEEPose, gaitParam.refEEWrench, gaitParam.refdz, gaitParam.footMidCoords);
 
+  // FootStepNodesListをdtすすめる
   footStepGenerator.procFootStepNodesList(gaitParam, dt,
                                           gaitParam.footStepNodesList, gaitParam.srcCoords, gaitParam.dstCoordsOrg, gaitParam.remainTimeOrg, gaitParam.swingState, gaitParam.elapsedTime, gaitParam.prevSupportPhase, gaitParam.relLandingHeight);
+
+  // 次のFootStepの追加、修正を行う
   footStepGenerator.calcFootSteps(gaitParam, dt,
                                   gaitParam.debugData, //for log
                                   gaitParam.footStepNodesList);
+
+  // 目標とすべき足先位置を求める
+  //  legCoordsGenerator.calcLegCoords(gaitParam, model, dt,
+  //                                  gaitParam.refZmpTraj, gaitParam.genCoords, gaitParam.swingState);
+
   return true;
 }
 
@@ -452,7 +466,7 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
       this->actToGenFrameConverter_.reset();
       this->footStepGenerator_.reset();
     }
-    TorqueAutoStabilizer::execAutoStabilizer(this->mode_, this->gaitParam_, this->dt_, this->model_, this->actToGenFrameConverter_, this->refToGenFrameConverter_, this->footStepGenerator_);
+    TorqueAutoStabilizer::execAutoStabilizer(this->mode_, this->gaitParam_, this->dt_, this->model_, this->actToGenFrameConverter_, this->refToGenFrameConverter_, this->footStepGenerator_, this->legCoordsGenerator_);
   }
 
   this->writeOutPortData(this->gaitParam_);
