@@ -38,7 +38,7 @@ public:
   std::vector<mathutil::TwoPointInterpolator<Eigen::Vector3d> > defaultTranslatePos = std::vector<mathutil::TwoPointInterpolator<Eigen::Vector3d> >(2,mathutil::TwoPointInterpolator<Eigen::Vector3d>(Eigen::Vector3d::Zero(),Eigen::Vector3d::Zero(),Eigen::Vector3d::Zero(),mathutil::HOFFARBIB)); // goPos, goVelocity, setFootSteps等するときの右脚と左脚の中心からの相対位置. また、reference frameとgenerate frameの対応付けに用いられる. (Z軸は鉛直). Z成分はあったほうが計算上扱いやすいからありにしているが、0でなければならない. RefToGenFrameConverter(handFixMode)が「左右」という概念を使うので、X成分も0でなければならない. 単位[m] 滑らかに変化する.
   std::vector<mathutil::TwoPointInterpolator<double> > isManualControlMode = std::vector<mathutil::TwoPointInterpolator<double> >(2, mathutil::TwoPointInterpolator<double>(0.0, 0.0, 0.0, mathutil::LINEAR)); // 要素数2. 0: rleg. 1: lleg. 0~1. 連続的に変化する. 1ならicEETargetPoseに従い、refEEWrenchに応じて重心をオフセットする. 0ならImpedanceControlをせず、refEEWrenchを無視し、DampingControlを行わない. 静止状態で無い場合や、支持脚の場合は、勝手に0になる. 両足が同時に1になることはない. 1にするなら、RefToGenFrameConverter.refFootOriginWeightを0にしたほうが良い. 1の状態でStartAutoStabilizerすると、遊脚で始まる
 
-  std::vector<bool> jointControllable; // 要素数はnq-7. 順序はurdf準拠．falseの場合、qやtauはrefの値をそのまま出力する(writeOutputPort時にref値で上書き). 指を位置制御にするため．
+  std::vector<bool> jointControllable; // 要素数はnv. 順序はurdf準拠．falseの場合、qやtauはrefの値をそのまま出力する(writeOutputPort時にref値で上書き). 指を位置制御にするため．
   // from data port
 public:
   Eigen::VectorXd refRobotPos; // 要素数nq.
@@ -142,7 +142,7 @@ public:
   }
 
   void init(const pinocchio::Model& model){
-    jointControllable.resize(model.nq-7, true);
+    jointControllable.resize(model.nv, true);
     Eigen::VectorXd q = Eigen::VectorXd::Zero(model.nq);
     std::cerr << "model.njoints : " << model.njoints << std::endl;
     std::cerr << "model.nq : " << model.nq << std::endl;
