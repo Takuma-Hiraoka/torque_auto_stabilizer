@@ -145,9 +145,17 @@ public:
     jointControllable.resize(model.nv, true);
     Eigen::VectorXd q = Eigen::VectorXd::Zero(model.nq);
     std::cerr << "model.njoints : " << model.njoints << std::endl;
+    std::cerr << "parents? : "  << std::endl;
+    for (int i=0 ; i <model.parents.size();i++){
+      std::cerr << "parents " << i << " is :" << model.parents[i] << std::endl;
+    }
+    for (int i=0 ; i <model.joints.size();i++){
+      std::cerr << "joints " << i << " axis :" << model.joints[i].classname() << std::endl;
+    }
     std::cerr << "model.nq : " << model.nq << std::endl;
     std::cerr << "model.nv : " << model.nv << std::endl;
     pinocchio::Data data(model);
+
     refRobotPos = Eigen::VectorXd::Zero(model.nq);
     actRobotPos  = Eigen::VectorXd::Zero(model.nq);
     actRobotVel  = Eigen::VectorXd::Zero(model.nv);
