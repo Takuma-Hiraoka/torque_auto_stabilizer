@@ -1,67 +1,69 @@
 #include "ActToGenFrameConverter.h"
-#include "pinocchio/algorithm/center-of-mass.hpp"
+#include "CnoidBodyUtil.h"
 
-bool ActToGenFrameConverter::convertFrame(const GaitParam& gaitParam, const pinocchio::Model& model, double dt, // input
-                                          pinocchio::Data& actRobot, std::vector<pinocchio::SE3>& o_actEEPose, std::vector<Eigen::Vector6d>& o_actFSensorWrench, mathutil::FirstOrderLowPassFilter<Eigen::Vector3d>& o_actCogVel, Eigen::Vector3d o_actCog) const {
+bool ActToGenFrameConverter::convertFrame(const GaitParam& gaitParam,  double dt, // input
+                                          cnoid::BodyPtr& actRobot, std::vector<cnoid::Position>& o_actEEPose, std::vector<Eigen::Vector6d>& o_actEEWrench, mathutil::FirstOrderLowPassFilter<Eigen::Vector3d>& o_actCogVel, mathutil::FirstOrderLowPassFilter<cnoid::Vector6>& o_actRootVel, Eigen::Vector3d o_actCog, std::vector<bool>& prevOriginLeg) const {
 
-  // Dataはroot pos(3)、root quarternion(4)、joint angles
-  Eigen::Vector3d actCogPrev = pinocchio::centerOfMass(model, actRobot, false); // 各リンクの重心は使わない．
+  cnoid::Vector3 actCogPrev = actRobot->centerOfMass();
+  cnoid::Position actRootPrev = actRobot->rootLink()->T();
 
   {
-    // FootOrigin座標系を用いてactRobotPos/Velをgenerate frameに投影しactRobotとする
-    Eigen::VectorXd actRobotPosOffset = gaitParam.actRobotPos;
-    Eigen::Quaterniond qOrig;
-    qOrig.coeffs() = actRobotPosOffset.segment(3,4);
-    Eigen::Quaterniond qOffset = Eigen::AngleAxisd(qOrig) * Eigen::AngleAxisd(mathutil::rotFromRpy(this->rpyOffset[0], this->rpyOffset[1], this->rpyOffset[2])); // rpyOffsetを適用
-    actRobotPosOffset.segment(3,4) = qOffset.coeffs();
-    pinocchio::forwardKinematics(model,actRobot,actRobotPosOffset);
-    //TODO
-    double rlegweight = gaitParam.footStepNodesList[0].isSupportPhase[RLEG]? 1.0 : 0.0;
-    double llegweight = gaitParam.footStepNodesList[0].isSupportPhase[LLEG]? 1.0 : 0.0;
-    pinocchio::SE3 actrleg = actRobot.oMi[model.getJointId(gaitParam.eeParentLink[RLEG])]*gaitParam.eeLocalT[RLEG];
-    pinocchio::SE3 actlleg = actRobot.oMi[model.getJointId(gaitParam.eeParentLink[LLEG])]*gaitParam.eeLocalT[LLEG];
-    pinocchio::SE3 actFootMidCoords = mathutil::calcMidCoords(std::vector<pinocchio::SE3>{actrleg, actlleg},
+    // FootOrigin座標系を用いてactRobotRawをgenerate frameに投影しactRobotとする
+    cnoidbodyutil::copyRobotState(gaitParam.actRobotRaw, actRobot);
+    actRobot->rootLink()->R() = (actRobot->rootLink()->R() * mathutil::rotFromRpy(this->rpyOffset[0], this->rpyOffset[1], this->rpyOffset[2])).eval(); // rpyOffsetを適用
+    actRobot->calcForwardKinematics();
+    cnoid::DeviceList<cnoid::ForceSensor> actForceSensors(gaitParam.actRobotRaw->devices());
+    cnoid::DeviceList<cnoid::ForceSensor> actOriginForceSensors(actRobot->devices());
+    for(int i=0;i<actForceSensors.size();i++){
+      actOriginForceSensors[i]->F() = actForceSensors[i]->F();
+    }
+    if(prevOriginLeg[RLEG] && !gaitParam.footStepNodesList[0].isSupportPhase[RLEG]) { // 右足が遊脚になった
+      prevOriginLeg[RLEG] = false;
+      prevOriginLeg[LLEG] = true;
+    } else if(prevOriginLeg[LLEG] && !gaitParam.footStepNodesList[0].isSupportPhase[LLEG]) { // 左足が遊脚になった
+      prevOriginLeg[RLEG] = true;
+      prevOriginLeg[LLEG] = false;
+    }
+    double rlegweight = prevOriginLeg[RLEG]? 1.0 : 0.0;
+    double llegweight = prevOriginLeg[LLEG]? 1.0 : 0.0;
+    if(!gaitParam.footStepNodesList[0].isSupportPhase[RLEG] && !gaitParam.footStepNodesList[0].isSupportPhase[LLEG]) rlegweight = llegweight = 1.0;
+    cnoid::Position actrleg = actRobot->link(gaitParam.eeParentLink[RLEG])->T()*gaitParam.eeLocalT[RLEG];
+    cnoid::Position actlleg = actRobot->link(gaitParam.eeParentLink[LLEG])->T()*gaitParam.eeLocalT[LLEG];
+    cnoid::Position actFootMidCoords = mathutil::calcMidCoords(std::vector<cnoid::Position>{actrleg, actlleg},
                                                                std::vector<double>{rlegweight, llegweight});
-    pinocchio::SE3 actFootOriginCoords = mathutil::orientCoordToAxis(actFootMidCoords, Eigen::Vector3d::UnitZ());
-    pinocchio::SE3 genFootMidCoords = mathutil::calcMidCoords(std::vector<pinocchio::SE3>{gaitParam.eeTargetPose[RLEG], gaitParam.eeTargetPose[LLEG]},
-                                                               std::vector<double>{rlegweight, llegweight});  // 1周期前のeeTargetPoseを使っているが、eeTargetPoseは不連続に変化するものではないのでよい
-    pinocchio::SE3 genFootOriginCoords = mathutil::orientCoordToAxis(genFootMidCoords, Eigen::Vector3d::UnitZ());
-
-    // 変換
-    pinocchio::SE3 transform = genFootMidCoords*actFootMidCoords.inverse();
-    Eigen::Vector3d pos = actRobotPosOffset.segment(0,3);
-    pinocchio::SE3 rootT = transform * pinocchio::SE3(qOffset,pos);
-    actRobotPosOffset.segment(0,3) = rootT.translation();
-    Eigen::Quaterniond qTransform(rootT.rotation());
-    actRobotPosOffset.segment(3,4) = qTransform.coeffs();
-    pinocchio::forwardKinematics(model,actRobot,actRobotPosOffset);
+    cnoid::Position actFootOriginCoords = mathutil::orientCoordToAxis(actFootMidCoords, cnoid::Vector3::UnitZ());
+    cnoid::Position genFootMidCoords = mathutil::calcMidCoords(std::vector<cnoid::Position>{gaitParam.eeTargetPose[RLEG], gaitParam.eeTargetPose[LLEG]},
+                                                               std::vector<double>{rlegweight, llegweight});  // 1周期前のabcTargetPoseを使っているが、abcTargetPoseは不連続に変化するものではないのでよい
+    cnoid::Position genFootOriginCoords = mathutil::orientCoordToAxis(genFootMidCoords, cnoid::Vector3::UnitZ());
+    cnoidbodyutil::moveCoords(actRobot, genFootOriginCoords, actFootOriginCoords);
+    actRobot->calcForwardKinematics();
+    actRobot->calcCenterOfMass();
   }
 
-  std::vector<pinocchio::SE3> actEEPose(gaitParam.eeName.size());
-  std::vector<Eigen::Vector6d> actFSensorWrench(gaitParam.eeName.size(), Eigen::Vector6d::Zero());
+  std::vector<cnoid::Position> actEEPose(gaitParam.eeName.size(), cnoid::Position::Identity());
+  std::vector<cnoid::Vector6> actEEWrench(gaitParam.eeName.size(), cnoid::Vector6::Zero());
   {
-    for(int i=0;i<gaitParam.fsensorName.size(); i++){ // eeName.sizeまではendeffectorまわり、それ以降はsensorまわり
-      pinocchio::SE3 senPose = actRobot.oMi[model.getJointId(gaitParam.fsensorParentLink[i])]*gaitParam.fsensorLocalT[i];
-      if (i<gaitParam.eeName.size()){    // 各エンドエフェクタのactualの位置・力を計算
-        actEEPose[i] = actRobot.oMi[model.getJointId(gaitParam.eeParentLink[i])]*gaitParam.eeLocalT[i];
-        pinocchio::SE3 eeTosenPose = actEEPose[i].inverse() * senPose;
-        Eigen::Vector6d eefF; // endeffector frame. endeffector origin.
-        eefF.head<3>() = eeTosenPose.rotation() * gaitParam.actFSensorWrenchOrigin[i].head<3>();
-        eefF.tail<3>() = eeTosenPose.rotation() * gaitParam.actFSensorWrenchOrigin[i].tail<3>() + eeTosenPose.translation().cross(eefF.head<3>());
-        actFSensorWrench[i].head<3>() = actEEPose[i].rotation() * eefF.head<3>();
-        actFSensorWrench[i].tail<3>() = actEEPose[i].rotation() * eefF.tail<3>();
-      } else {
-        actFSensorWrench[i].head<3>() = senPose.rotation() * gaitParam.actFSensorWrenchOrigin[i].head<3>();
-        actFSensorWrench[i].tail<3>() = senPose.rotation() * gaitParam.actFSensorWrenchOrigin[i].tail<3>();
+    // 各エンドエフェクタのactualの位置・力を計算
+    for(int i=0;i<gaitParam.eeName.size(); i++){
+      actEEPose[i] = actRobot->link(gaitParam.eeParentLink[i])->T() * gaitParam.eeLocalT[i];
+      if(this->eeForceSensor[i] != ""){
+        cnoid::ForceSensorPtr sensor = actRobot->findDevice<cnoid::ForceSensor>(this->eeForceSensor[i]);
+        cnoid::Vector6 senF = sensor->F();
+        cnoid::Position senPose = sensor->link()->T() * sensor->T_local();
+        cnoid::Position eefTosenPose = gaitParam.actEEPose[i].inverse() * senPose;
+        cnoid::Vector6 eefF; // endeffector frame. endeffector origin.
+        eefF.head<3>() = eefTosenPose.linear() * senF.head<3>();
+        eefF.tail<3>() = eefTosenPose.linear() * senF.tail<3>() + eefTosenPose.translation().cross(eefF.head<3>());
+        actEEWrench[i].head<3>() = gaitParam.actEEPose[i].linear() * eefF.head<3>();
+        actEEWrench[i].tail<3>() = gaitParam.actEEPose[i].linear() * eefF.tail<3>();
       }
     }
   }
 
-  Eigen::Vector3d actCog;
-  Eigen::Vector3d actCogVel;
+  cnoid::Vector3 actCogVel;
+  cnoid::Vector6 actRootVel;
   {
     // actCogを計算
-    actCog = pinocchio::centerOfMass(model, actRobot, false);
     bool genContactState_changed = false;
     for(int i=0;i<NUM_LEGS;i++){
       if(gaitParam.footStepNodesList[0].isSupportPhase[i] != gaitParam.prevSupportPhase[i]) genContactState_changed = true;
@@ -69,18 +71,22 @@ bool ActToGenFrameConverter::convertFrame(const GaitParam& gaitParam, const pino
     if(genContactState_changed){
       //座標系が飛んでいるので、gaitParam.actCogVel は前回の周期の値をそのままつかう
       actCogVel = gaitParam.actCogVel.value();
+      actRootVel = gaitParam.actRootVel.value();
     }else{
-      actCogVel = (actCog - actCogPrev) / dt;
+      actCogVel = (actRobot->centerOfMass() - actCogPrev) / dt;
+      actRootVel.head<3>() = (actRobot->rootLink()->translation() - actRootPrev.translation()) / dt;
+      actRootVel.tail<3>() = mathutil::rpyFromRot(actRobot->rootLink()->R() * actRootPrev.linear().transpose()) / dt;
     }
   }
 
-  o_actCog = actCog;
   o_actEEPose = actEEPose;
-  o_actFSensorWrench = actFSensorWrench;
+  o_actEEWrench = actEEWrench;
   if(this->isInitial){
-    o_actCogVel.reset(Eigen::Vector3d::Zero());
+    o_actCogVel.reset(cnoid::Vector3::Zero());
+    o_actRootVel.reset(cnoid::Vector6::Zero());
   } else {
     o_actCogVel.passFilter(actCogVel, dt);
+    o_actRootVel.passFilter(actRootVel, dt);
   }
 
   this->isInitial = false;

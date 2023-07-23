@@ -1,5 +1,8 @@
 #include "TorqueAutoStabilizer.h"
-#include "pinocchio/parsers/urdf.hpp"
+#include <cnoid/BodyLoader>
+#include <cnoid/ForceSensor>
+#include <cnoid/RateGyroSensor>
+#include <cnoid/EigenUtil>
 #include "MathUtil.h"
 #include <fstream>
 #include <sstream>
@@ -67,51 +70,15 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
 
   {
     // load robot model
-    std::string fileName;
-    this->getProperty("urdf_model", fileName);
+    cnoid::BodyLoader bodyLoader;
+    std::string fileName; this->getProperty("model", fileName);
     if (fileName.find("file://") == 0) fileName.erase(0, strlen("file://"));
-    pinocchio::urdf::buildModel(fileName,pinocchio::JointModelFreeFlyer(),this->model_,true);
-    std::cerr << "model name: " << this->model_.name << std::endl;
-    this->gaitParam_.init(this->model_);
-  }
-
-  {
-    // load joint id table
-    std::string fileName;
-    this->getProperty("joint_id_table", fileName);
-    if (fileName.find("file://") == 0) fileName.erase(0, strlen("file://"));
-    std::fstream id_table;
-    id_table.open(fileName);
-    this->joint_id_table_.resize(this->model_.nv -6);
-
-    if (id_table.is_open()) {
-      double tmp;
-      int i = 0;
-      for (; i < this->model_.nv -6; i++) { // jointの数だけ
-
-      retry:
-        {
-          std::string str;
-          if (std::getline(id_table, str)) {
-            if (str.empty())   goto retry;
-            if (str[0] == '#') goto retry;
-
-            std::istringstream sstrm(str);
-            sstrm >> tmp; // RobotHardware joint id. iと同じ
-            if(sstrm.eof()) goto next;
-            sstrm >> tmp;
-            joint_id_table_[i] = tmp;
-          } else {
-            i--;
-            break;
-          }
-        }
-
-      next:
-        std::cerr << "RobotHardware joint: " << i << " pinocchio joint_id: " << joint_id_table_[i] << std::endl;
-      }
-      id_table.close();
+    cnoid::BodyPtr robot = bodyLoader.load(fileName);
+    if(!robot){
+      std::cerr << "\x1b[31m[" << this->m_profile.instance_name << "] " << "failed to load model[" << fileName << "]" << "\x1b[39m" << std::endl;
+      return RTC::RTC_ERROR;
     }
+    this->gaitParam_.init(robot);
   }
 
   {
@@ -141,94 +108,23 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
       // check validity
       name.erase(std::remove(name.begin(), name.end(), ' '), name.end()); // remove whitespace
       parentLink.erase(std::remove(parentLink.begin(), parentLink.end(), ' '), parentLink.end()); // remove whitespace
-      if(!this->model_.existJointName(parentLink)){
+      if(!this->gaitParam_.refRobotRaw->link(parentLink)){
         std::cerr << "\x1b[31m[" << this->m_profile.instance_name << "] " << " link [" << parentLink << "]" << " is not found for " << name << "\x1b[39m" << std::endl;
         return RTC::RTC_ERROR;
       }
-      Eigen::Matrix3d localR;
-      if(localaxis.norm() == 0) localR = Eigen::Matrix3d::Identity();
+      cnoid::Matrix3 localR;
+      if(localaxis.norm() == 0) localR = cnoid::Matrix3::Identity();
       else localR = Eigen::AngleAxisd(localangle, localaxis.normalized()).toRotationMatrix();
-      pinocchio::SE3 localT(localR,localp);
+      cnoid::Position localT;
+      localT.translation() = localp;
+      localT.linear() = localR;
+
       this->gaitParam_.push_backEE(name, parentLink, localT);
     }
     // 0番目が右脚. 1番目が左脚. という仮定がある.
   }
 
   {
-    // load imu
-    std::string imu; this->getProperty("imu", imu);
-    std::stringstream ss_imu(imu);
-    std::string buf;
-    while(std::getline(ss_imu, buf, ',')){
-      std::string parentLink;
-      Eigen::Vector3d localp;
-      Eigen::Vector3d localaxis;
-      double localangle;
-
-      //   parentLink, x, y, z, theta, ax, ay, az
-      parentLink = buf;
-      if(!std::getline(ss_imu, buf, ',')) break; localp[0] = std::stod(buf);
-      if(!std::getline(ss_imu, buf, ',')) break; localp[1] = std::stod(buf);
-      if(!std::getline(ss_imu, buf, ',')) break; localp[2] = std::stod(buf);
-      if(!std::getline(ss_imu, buf, ',')) break; localaxis[0] = std::stod(buf);
-      if(!std::getline(ss_imu, buf, ',')) break; localaxis[1] = std::stod(buf);
-      if(!std::getline(ss_imu, buf, ',')) break; localaxis[2] = std::stod(buf);
-      if(!std::getline(ss_imu, buf, ',')) break; localangle = std::stod(buf);
-
-      // check validity
-      parentLink.erase(std::remove(parentLink.begin(), parentLink.end(), ' '), parentLink.end()); // remove whitespace
-      if(!this->model_.existJointName(parentLink)){
-        std::cerr << "\x1b[31m[" << this->m_profile.instance_name << "] " << " link [" << parentLink << "]" << " is not found for imu \x1b[39m" << std::endl;
-        return RTC::RTC_ERROR;
-      }
-      Eigen::Matrix3d localR;
-      if(localaxis.norm() == 0) localR = Eigen::Matrix3d::Identity();
-      else localR = Eigen::AngleAxisd(localangle, localaxis.normalized()).toRotationMatrix();
-      pinocchio::SE3 localT(localR,localp);
-      this->gaitParam_.initImu(parentLink, localT);
-    }
-  }
-
-  {
-    // load fsensor
-    std::string forceSensors; this->getProperty("force_sensors", forceSensors);
-    std::stringstream ss_forceSensors(forceSensors);
-    std::string buf;
-    while(std::getline(ss_forceSensors, buf, ',')){
-      std::string name;
-      std::string parentLink;
-      Eigen::Vector3d localp;
-      Eigen::Vector3d localaxis;
-      double localangle;
-
-      //   name, parentLink, x, y, z, theta, ax, ay, az
-      name = buf;
-      if(!std::getline(ss_forceSensors, buf, ',')) break; parentLink = buf;
-      if(!std::getline(ss_forceSensors, buf, ',')) break; localp[0] = std::stod(buf);
-      if(!std::getline(ss_forceSensors, buf, ',')) break; localp[1] = std::stod(buf);
-      if(!std::getline(ss_forceSensors, buf, ',')) break; localp[2] = std::stod(buf);
-      if(!std::getline(ss_forceSensors, buf, ',')) break; localaxis[0] = std::stod(buf);
-      if(!std::getline(ss_forceSensors, buf, ',')) break; localaxis[1] = std::stod(buf);
-      if(!std::getline(ss_forceSensors, buf, ',')) break; localaxis[2] = std::stod(buf);
-      if(!std::getline(ss_forceSensors, buf, ',')) break; localangle = std::stod(buf);
-
-      // check validity
-      name.erase(std::remove(name.begin(), name.end(), ' '), name.end()); // remove whitespace
-      parentLink.erase(std::remove(parentLink.begin(), parentLink.end(), ' '), parentLink.end()); // remove whitespace
-      if(!this->model_.existJointName(parentLink)){
-        std::cerr << "\x1b[31m[" << this->m_profile.instance_name << "] " << " link [" << parentLink << "]" << " is not found for " << name << "\x1b[39m" << std::endl;
-        return RTC::RTC_ERROR;
-      }
-      Eigen::Matrix3d localR;
-      if(localaxis.norm() == 0) localR = Eigen::Matrix3d::Identity();
-      else localR = Eigen::AngleAxisd(localangle, localaxis.normalized()).toRotationMatrix();
-      pinocchio::SE3 localT(localR,localp);
-      this->gaitParam_.push_backFSensor(name, parentLink, localT);
-    }
-    // 0番目が右脚. 1番目が左脚. という仮定がある.
-  }
-
-    {
     // add more ports (EndEffectorやForceSensorの情報を使って)
 
     // 各EndEffectorにつき、ref<name>WrenchInというInPortをつくる
@@ -241,10 +137,11 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
     }
 
     // 各ForceSensorにつき、act<name>InというInportをつくる
-    this->m_actWrenchIn_.resize(this->gaitParam_.fsensorName.size());
-    this->m_actWrench_.resize(this->gaitParam_.fsensorName.size());
-    for(int i=0;i<this->gaitParam_.fsensorName.size();i++){
-      std::string name = "act"+this->gaitParam_.fsensorName[i]+"In";
+    cnoid::DeviceList<cnoid::ForceSensor> forceSensors(this->gaitParam_.actRobotRaw->devices());
+    this->m_actWrenchIn_.resize(forceSensors.size());
+    this->m_actWrench_.resize(forceSensors.size());
+    for(int i=0;i<forceSensors.size();i++){
+      std::string name = "act"+forceSensors[i]->name()+"In";
       this->m_actWrenchIn_[i] = std::make_unique<RTC::InPort<RTC::TimedDoubleSeq> >(name.c_str(), this->m_actWrench_[i]);
       this->addInPort(name.c_str(), *(this->m_actWrenchIn_[i]));
     }
@@ -267,39 +164,62 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
       this->addOutPort(name.c_str(), *(this->m_actEEWrenchOut_[i]));
     }
 
-    // TODO
-    // 各ForceSensorにつき、act<name>WrenchOutという(fsensorName.size() - eeName.size() 個の)OutPortをつくる
   }
+
+  {
+    // init ActToGenFrameConverter
+    this->actToGenFrameConverter_.eeForceSensor.resize(this->gaitParam_.eeName.size());
+    cnoid::DeviceList<cnoid::ForceSensor> forceSensors(this->gaitParam_.refRobotRaw->devices());
+    for(int i=0;i<this->gaitParam_.eeName.size();i++){
+      // 各EndEffectorsから親リンク側に遡っていき、最初に見つかったForceSensorをEndEffectorに対応付ける. 以後、ForceSensorの値を座標変換したものがEndEffectorが受けている力とみなされる. 見つからなければ受けている力は常に0とみなされる
+      std::string forceSensor = "";
+      cnoid::LinkPtr link = this->gaitParam_.refRobotRaw->link(this->gaitParam_.eeParentLink[i]);
+      bool found = false;
+      while (link != nullptr && found == false) {
+        for (size_t j = 0; j < forceSensors.size(); j++) {
+          if(forceSensors[j]->link() == link) {
+            forceSensor = forceSensors[j]->name();
+            found = true;
+            break;
+          }
+        }
+      }
+      this->actToGenFrameConverter_.eeForceSensor[i] = forceSensor;
+    }
+  }
+
 
   return RTC::RTC_OK;
 }
 
-bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel, std::vector<Eigen::Vector6d>& actFSensorWrenchOrigin){
+bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, cnoid::BodyPtr refRobotRaw, cnoid::BodyPtr actRobotRaw){
   if (this->m_qRefIn_.isNew()){
     this->m_qRefIn_.read();
     for(int i=0;i<this->m_qRef_.data.length();i++){
-      refRobotPos[7+this->joint_id_table_[i]] = m_qRef_.data[i];
+      refRobotRaw->joint(i)->q() = m_qRef_.data[i];
     }
   }
 
   if (this->m_tauRefIn_.isNew()){
-    this->m_tauRefIn_.read(); //TODO
+    this->m_tauRefIn_.read();
+    for(int i=0;i<this->m_qRef_.data.length();i++){
+      refRobotRaw->joint(i)->u() = m_tauRef_.data[i];
+    }
   }
 
   if(this->m_refBasePosIn_.isNew()){
     this->m_refBasePosIn_.read();
-    refRobotPos[0] = this->m_refBasePos_.data.x;
-    refRobotPos[1] = this->m_refBasePos_.data.y;
-    refRobotPos[2] = this->m_refBasePos_.data.z;
+    refRobotRaw->rootLink()->p()[0] = this->m_refBasePos_.data.x;
+    refRobotRaw->rootLink()->p()[1] = this->m_refBasePos_.data.y;
+    refRobotRaw->rootLink()->p()[2] = this->m_refBasePos_.data.z;
   }
   if(this->m_refBaseRpyIn_.isNew()){
     this->m_refBaseRpyIn_.read();
-    Eigen::Quaterniond q;
-    q = Eigen::AngleAxisd(this->m_refBaseRpy_.data.r, Eigen::Vector3d::UnitX())
-        * Eigen::AngleAxisd(this->m_refBaseRpy_.data.p, Eigen::Vector3d::UnitY())
-        * Eigen::AngleAxisd(this->m_refBaseRpy_.data.y, Eigen::Vector3d::UnitZ());
-    refRobotPos.segment(3,4) = q.coeffs();
+    refRobotRaw->rootLink()->R() = mathutil::rotFromRpy(this->m_refBaseRpy_.data.r, this->m_refBaseRpy_.data.p, this->m_refBaseRpy_.data.y);
   }
+
+  refRobotRaw->calcForwardKinematics();
+  refRobotRaw->calcCenterOfMass();
 
   for(int i=0;i<this->m_refEEWrenchIn_.size();i++){
     if(this->m_refEEWrenchIn_[i]->isNew()){
@@ -310,65 +230,72 @@ bool TorqueAutoStabilizer::readInPortData(const GaitParam& gaitParam, const pino
   if (this->m_qActIn_.isNew()){
     this->m_qActIn_.read();
     for(int i=0;i<this->m_qAct_.data.length();i++){
-      actRobotPos[7+this->joint_id_table_[i]] = m_qAct_.data[i];
+      actRobotRaw->joint(i)->q() = m_qAct_.data[i];
     }
   }
 
   if (this->m_dqActIn_.isNew()){
     this->m_dqActIn_.read();
     for(int i=0;i<this->m_dqAct_.data.length();i++){
-      actRobotVel[6+this->joint_id_table_[i]] = m_dqAct_.data[i];
+      actRobotRaw->joint(i)->dq() = m_dqAct_.data[i];
     }
   }
 
   if(this->m_actImuIn_.isNew()){
     this->m_actImuIn_.read();
-    pinocchio::SE3 imuParent = gaitParam.actRobot.oMi[model.getJointId(gaitParam.imuParentLink)];
-    Eigen::Matrix3d imuR = imuParent.rotation() * gaitParam.imuLocalT.rotation();
-    Eigen::Matrix3d actR = mathutil::rotFromRpy(this->m_actImu_.data.r, this->m_actImu_.data.p, this->m_actImu_.data.y);
-    Eigen::Quaterniond q = Eigen::AngleAxisd(actR) * Eigen::AngleAxisd(imuR.transpose() * gaitParam.actRobot.oMi[model.getJointId("root_joint")].rotation());// 単純に3x3行列の空間でRを積算していると、だんだん数値誤差によって回転行列でなくなってしまう恐れがあるので念の為
-    actRobotPos.segment(3,4) = q.coeffs();
+    actRobotRaw->calcForwardKinematics();
+    cnoid::RateGyroSensorPtr imu = actRobotRaw->findDevice<cnoid::RateGyroSensor>("gyrometer");
+    cnoid::Matrix3 imuR = imu->link()->R() * imu->R_local();
+    cnoid::Matrix3 actR = cnoid::rotFromRpy(this->m_actImu_.data.r, this->m_actImu_.data.p, this->m_actImu_.data.y);
+    actRobotRaw->rootLink()->R() = Eigen::Matrix3d(Eigen::AngleAxisd(actR) * Eigen::AngleAxisd(imuR.transpose() * actRobotRaw->rootLink()->R())); // 単純に3x3行列の空間でRを積算していると、だんだん数値誤差によって回転行列でなくなってしまう恐れがあるので念の為
   }
+
+  actRobotRaw->calcForwardKinematics();
+  actRobotRaw->calcCenterOfMass();
 
   if (this->m_tauActIn_.isNew()){
     this->m_tauActIn_.read();
+    for(int i=0;i<this->m_qRef_.data.length();i++){
+      actRobotRaw->joint(i)->u() = m_tauAct_.data[i];
+    }
   }
 
+  cnoid::DeviceList<cnoid::ForceSensor> forceSensors(actRobotRaw->devices());
   for(int i=0;i<this->m_actWrenchIn_.size();i++){
     if(this->m_actWrenchIn_[i]->isNew()){
       this->m_actWrenchIn_[i]->read();
       if(this->m_actWrench_[i].data.length() == 6){
         for(int j=0;j<6;j++){
-          actFSensorWrenchOrigin[i][j] = this->m_actWrench_[i].data[j];
+          forceSensors[i]->F()[j] = this->m_actWrench_[i].data[j];
         }
       }
     }
   }
 }
 
-bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter, const RefToGenFrameConverter& refToGenFrameConverter, const FootStepGenerator& footStepGenerator, const LegCoordsGenerator& legCoordsGenerator) {
+bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const ActToGenFrameConverter& actToGenFrameConverter, const RefToGenFrameConverter& refToGenFrameConverter, const FootStepGenerator& footStepGenerator, const LegCoordsGenerator& legCoordsGenerator) {
   // FootOrigin座標系を用いてactRobotRawをgenerate frameに投影しactRobotとする
   if(mode.isSyncToASTInit()){
-    refToGenFrameConverter.initFootCoords(gaitParam, model, gaitParam.footMidCoords, gaitParam.refRobot);
-    footStepGenerator.initFootStepNodesList(gaitParam, model,
+    refToGenFrameConverter.initFootCoords(gaitParam, gaitParam.footMidCoords, gaitParam.refRobot);
+    footStepGenerator.initFootStepNodesList(gaitParam,
                                             gaitParam.footStepNodesList, gaitParam.srcCoords, gaitParam.dstCoordsOrg, gaitParam.remainTimeOrg, gaitParam.swingState, gaitParam.elapsedTime, gaitParam.prevSupportPhase);
     legCoordsGenerator.initLegCoords(gaitParam,
 				     gaitParam.refZmpTraj, gaitParam.genCoords);
   }
 
-  // FootOrigin座標系を用いてactRobotPosをgenerate frameに投影しactRobotとする
-  actToGenFrameConverter.convertFrame(gaitParam, model, dt,
-                                      gaitParam.actRobot, gaitParam.actEEPose, gaitParam.actFSensorWrench, gaitParam.actCogVel, gaitParam.actCog);
+  // FootOrigin座標系を用いてactRobotRawをgenerate frameに投影しactRobotとする
+  actToGenFrameConverter.convertFrame(gaitParam, dt,
+                                      gaitParam.actRobot, gaitParam.actEEPose, gaitParam.actEEWrench, gaitParam.actCogVel, gaitParam.actRootVel, gaitParam.actCog, gaitParam.prevOriginLeg);
 
   // FootOrigin座標系を用いてrefRobotPosをgenerate frameに投影しrefRobotとする
-  refToGenFrameConverter.convertFrame(gaitParam, model, dt, gaitParam.actRobot, gaitParam.refRobot, gaitParam.refEEPose, gaitParam.refEEWrench, gaitParam.refdz, gaitParam.footMidCoords);
+  refToGenFrameConverter.convertFrame(gaitParam, dt, gaitParam.refRobot, gaitParam.refEEPose, gaitParam.refEEWrench, gaitParam.refdz, gaitParam.footMidCoords);
 
   // FootStepNodesListをdtすすめる
-  footStepGenerator.procFootStepNodesList(gaitParam, dt,
+  footStepGenerator.procFootStepNodesList(gaitParam, dt, true,
                                           gaitParam.footStepNodesList, gaitParam.srcCoords, gaitParam.dstCoordsOrg, gaitParam.remainTimeOrg, gaitParam.swingState, gaitParam.elapsedTime, gaitParam.prevSupportPhase, gaitParam.relLandingHeight);
 
   // 次のFootStepの追加、修正を行う
-  footStepGenerator.calcFootSteps(gaitParam, dt,
+  footStepGenerator.calcFootSteps(gaitParam, dt, true,
                                   gaitParam.debugData, //for log
                                   gaitParam.footStepNodesList);
 
@@ -385,7 +312,7 @@ bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
     m_q_.tm = m_qRef_.tm;
     m_q_.data.length(m_qRef_.data.length());
     for (int i = 0 ; i < m_q_.data.length(); i++){
-      m_q_.data[i] = gaitParam.refRobotPos[7+this->joint_id_table_[i]];
+      m_q_.data[i] = gaitParam.refRobotRaw->joint(i)->q();
     }
     this->m_qOut_.write();
   }
@@ -405,17 +332,17 @@ bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
       this->m_actEEPose_[i].data.position.x = gaitParam.actEEPose[i].translation()[0];
       this->m_actEEPose_[i].data.position.y = gaitParam.actEEPose[i].translation()[1];
       this->m_actEEPose_[i].data.position.z = gaitParam.actEEPose[i].translation()[2];
-      Eigen::Vector3d rpy = mathutil::rpyFromRot(gaitParam.actEEPose[i].rotation());
+      Eigen::Vector3d rpy = mathutil::rpyFromRot(gaitParam.actEEPose[i].linear());
       this->m_actEEPose_[i].data.orientation.r = rpy[0];
       this->m_actEEPose_[i].data.orientation.p = rpy[1];
       this->m_actEEPose_[i].data.orientation.y = rpy[2];
       this->m_actEEPoseOut_[i]->write();
     }
 
-    for(int i=0;i<gaitParam.fsensorName.size();i++){
+    for(int i=0;i<gaitParam.actEEWrench.size();i++){
       this->m_actEEWrench_[i].tm = this->m_qRef_.tm;
       this->m_actEEWrench_[i].data.length(6);
-      for(int j=0;j<6;j++) this->m_actEEWrench_[i].data[j] = gaitParam.actFSensorWrench[i][j];
+      for(int j=0;j<6;j++) this->m_actEEWrench_[i].data[j] = gaitParam.actEEWrench[i][j];
       this->m_actEEWrenchOut_[i]->write();
     }
 
@@ -462,18 +389,17 @@ bool TorqueAutoStabilizer::writeOutPortData(const GaitParam & gaitParam){
 }
 
 RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
-  this->readInPortData(this->gaitParam_, this->model_, this->gaitParam_.refRobotPos, this->gaitParam_.actRobotPos, this->gaitParam_.actRobotVel, this->gaitParam_.actFSensorWrenchOrigin);
+  this->readInPortData(this->gaitParam_, this->gaitParam_.refRobotRaw, this->gaitParam_.actRobotRaw);
 
   this->mode_.update(this->dt_);
-  this->refToGenFrameConverter_.update(this->dt_);
 
   if(this->mode_.isASTRunning()) {
     if(this->mode_.isSyncToASTInit()){ // startAutoBalancer直後の初回. 内部パラメータのリセット
-      this->refToGenFrameConverter_.reset();
       this->actToGenFrameConverter_.reset();
+      this->refToGenFrameConverter_.reset();
       this->footStepGenerator_.reset();
     }
-    TorqueAutoStabilizer::execAutoStabilizer(this->mode_, this->gaitParam_, this->dt_, this->model_, this->actToGenFrameConverter_, this->refToGenFrameConverter_, this->footStepGenerator_, this->legCoordsGenerator_);
+    TorqueAutoStabilizer::execAutoStabilizer(this->mode_, this->gaitParam_, this->dt_, this->actToGenFrameConverter_, this->refToGenFrameConverter_, this->footStepGenerator_, this->legCoordsGenerator_);
   }
 
   this->writeOutPortData(this->gaitParam_);

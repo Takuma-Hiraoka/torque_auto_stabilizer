@@ -75,9 +75,9 @@ namespace mathutil
       return Eigen::Matrix3d(Eigen::AngleAxisd(angle, axis) * m_);
     }
   }
-  pinocchio::SE3 orientCoordToAxis(const pinocchio::SE3& m, const Eigen::Vector3d& axis, const Eigen::Vector3d& localaxis){
-    pinocchio::SE3 ret = m;
-    ret.rotation() = mathutil::orientCoordToAxis(ret.rotation(), axis, localaxis);
+  cnoid::Position orientCoordToAxis(const cnoid::Position& m, const Eigen::Vector3d& axis, const Eigen::Vector3d& localaxis){
+    cnoid::Position ret = m;
+    ret.linear() = mathutil::orientCoordToAxis(ret.linear(), axis, localaxis);
     return ret;
   }
 
@@ -101,16 +101,16 @@ namespace mathutil
     return midrot.toRotationMatrix();
   }
 
-  pinocchio::SE3 calcMidCoords(const std::vector<pinocchio::SE3>& coords, const std::vector<double>& weights){
+  cnoid::Position calcMidCoords(const std::vector<cnoid::Position>& coords, const std::vector<double>& weights){
     // coordsとweightsのサイズは同じでなければならない
     double sumWeight = 0.0;
-    pinocchio::SE3 midCoords;
+    cnoid::Position midCoords;
 
     for(int i=0;i<coords.size();i++){
       if(weights[i]<=0) continue;
       midCoords.translation() = ((midCoords.translation()*sumWeight + coords[i].translation()*weights[i])/(sumWeight+weights[i])).eval();
-      midCoords.rotation() = mathutil::slerp(Eigen::AngleAxisd(midCoords.rotation()), Eigen::AngleAxisd(coords[i].rotation()),(weights[i]/(sumWeight+weights[i]))).toRotationMatrix();
-      //midCoords.rotation() = Eigen::Quaterniond(midCoords.rotation()).slerp(weights[i]/(sumWeight+weights[i]),Eigen::Quaterniond(coords[i].rotation())).toRotationMatrix(); // quaternionのslerpは、90度回転した姿勢で不自然な遠回り補間をするので使ってはならない
+      midCoords.linear() = mathutil::slerp(Eigen::AngleAxisd(midCoords.linear()), Eigen::AngleAxisd(coords[i].linear()),(weights[i]/(sumWeight+weights[i]))).toRotationMatrix();
+      //midCoords.linear() = Eigen::Quaterniond(midCoords.linear()).slerp(weights[i]/(sumWeight+weights[i]),Eigen::Quaterniond(coords[i].linear())).toRotationMatrix(); // quaternionのslerpは、90度回転した姿勢で不自然な遠回り補間をするので使ってはならない
       sumWeight += weights[i];
     }
     return midCoords;

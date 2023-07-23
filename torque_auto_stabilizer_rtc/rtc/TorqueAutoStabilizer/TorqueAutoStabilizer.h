@@ -15,8 +15,7 @@
 
 #include <torque_auto_stabilizer_msgs/idl/TorqueAutoStabilizer.hh>
 
-#include "pinocchio/algorithm/joint-configuration.hpp"
-#include "pinocchio/algorithm/kinematics.hpp"
+#include <cnoid/Body>
 #include "TorqueAutoStabilizerService_impl.h"
 #include "GaitParam.h"
 #include "ActToGenFrameConverter.h"
@@ -148,8 +147,6 @@ protected:
     bool isSyncToIdle() const{ return current==MODE_SYNC_TO_IDLE;}
     bool isSyncToIdleInit() const{ return (current != previous) && isSyncToIdle();}
   };
-  pinocchio::Model model_;
-  std::vector<int> joint_id_table_;
   GaitParam gaitParam_;
   ActToGenFrameConverter actToGenFrameConverter_;
   RefToGenFrameConverter refToGenFrameConverter_;
@@ -157,8 +154,8 @@ protected:
   LegCoordsGenerator legCoordsGenerator_;
   ControlMode mode_;
   bool getProperty(const std::string& key, std::string& ret);
-  bool readInPortData(const GaitParam& gaitParam, const pinocchio::Model& model, Eigen::VectorXd& refRobotPos, Eigen::VectorXd& actRobotPos, Eigen::VectorXd& actRobotVel, std::vector<Eigen::Vector6d>& actFSensorWrenchOrigin);
-  static bool execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const pinocchio::Model model, const ActToGenFrameConverter& actToGenFrameConverter, const RefToGenFrameConverter& refToGenFrameConverter, const FootStepGenerator& footStepGenerator, const LegCoordsGenerator& legCoordsGenerator);
+  bool readInPortData(const GaitParam& gaitParam, cnoid::BodyPtr refRobotRaw, cnoid::BodyPtr actRobotRaw);
+  static bool execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt,  const ActToGenFrameConverter& actToGenFrameConverter, const RefToGenFrameConverter& refToGenFrameConverter, const FootStepGenerator& footStepGenerator, const LegCoordsGenerator& legCoordsGenerator);
   bool writeOutPortData(const GaitParam & gaitParam);
 
 };

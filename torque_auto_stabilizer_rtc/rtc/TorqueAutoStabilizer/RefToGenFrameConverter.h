@@ -7,18 +7,11 @@ class RefToGenFrameConverter {
 public:
   // RefToGenFrameConverterだけでつかうパラメータ
   std::vector<mathutil::TwoPointInterpolator<double> > refFootOriginWeight = std::vector<mathutil::TwoPointInterpolator<double> >(NUM_LEGS,mathutil::TwoPointInterpolator<double>(1.0,0.0,0.0,mathutil::HOFFARBIB)); // 要素数2. 0: rleg. 1: lleg. 0~1. Reference座標系のfootOriginを計算するときに用いるweight. このfootOriginからの相対位置で、GaitGeneratorに管理されていないEndEffectorのReference位置が解釈される. interpolatorによって連続的に変化する. 全てのLegのrefFootOriginWeightが同時に0になることはない.
-  mathutil::TwoPointInterpolator<double> solveFKMode = mathutil::TwoPointInterpolator<double>(1.0,0.0,0.0,mathutil::HOFFARBIB); // 0~1. 1ならエンドエフェクタ位置姿勢をrefRobotRawのFKから求める. 0なら、refEEPoseRawから求める. startAutoStabilizerした直後は必ず1
 
 public:
   // startAutoStabilizer時に呼ばれる
   void reset() {
     for(int i=0;i<refFootOriginWeight.size();i++) refFootOriginWeight[i].reset(refFootOriginWeight[i].getGoal());
-    solveFKMode.reset(1.0);
-  }
-  // 内部の補間器をdtだけ進める
-  void update(double dt){
-    for(int i=0;i<refFootOriginWeight.size();i++) refFootOriginWeight[i].interpolate(dt);
-    solveFKMode.interpolate(dt);
   }
 public:
   /*
@@ -35,22 +28,20 @@ public:
   // ロボット内座標系を初期化する．
   // 原点にfootMidCoordsを置く．
   // footMidCoordsとrefRobotのfootOrigin座標系が一致するようにrefRobotを変換し、その両足先をfootstepNodeのはじめにする。
-  bool initFootCoords(const GaitParam& gaitParam, const pinocchio::Model& model,// input
-                      mathutil::TwoPointInterpolatorSE3& o_footMidCoords, pinocchio::Data& refRobot) const; // output
+  bool initFootCoords(const GaitParam& gaitParam, // input
+                      mathutil::TwoPointInterpolatorSE3& o_footMidCoords, cnoid::BodyPtr& refRobot) const; // output
 
-  // reference frameで表現されたrefRobotPosをgenerate frameに投影しrefRobotとし、各種reference値をgenerate frameに変換する
-  bool convertFrame(const GaitParam& gaitParam, const pinocchio::Model& model, double dt, pinocchio::Data& actRobot, // input
-                    pinocchio::Data& refRobot, std::vector<pinocchio::SE3>& o_refEEPose, std::vector<Eigen::Vector6d>& o_refEEWrench, double& o_refdz, mathutil::TwoPointInterpolatorSE3& o_footMidCoords) const; // output
+  // reference frameで表現されたrefRobotRawをgenerate frameに投影しrefRobotとし、各種referencec値をgenerate frameに変換する
+  bool convertFrame(const GaitParam& gaitParam, double dt,// input
+                    cnoid::BodyPtr& refRobot, std::vector<cnoid::Position>& o_refEEPose, std::vector<cnoid::Vector6>& o_refEEWrench, double& o_refdz, mathutil::TwoPointInterpolatorSE3& o_footMidCoords) const; // output
 protected:
   // 現在のFootStepNodesListから、genRobotのfootMidCoordsを求める (gaitParam.footMidCoords)
   void calcFootMidCoords(const GaitParam& gaitParam, double dt, mathutil::TwoPointInterpolatorSE3& footMidCoords) const;
   // refRobotRawをrefRobotに変換する.
-  void convertRefRobotRaw(const GaitParam& gaitParam, const pinocchio::Model& model, const pinocchio::SE3& genFootMidCoords, pinocchio::Data& refRobot, std::vector<pinocchio::SE3>& refEEPoseFK, double& refdz) const;
-  // refEEPoseRawを変換する.
-  void convertRefEEPoseRaw(const GaitParam& gaitParam, const pinocchio::Model& model, const pinocchio::SE3& genFootMidCoords, std::vector<pinocchio::SE3>& refEEPoseWithOutFK) const;
+  void convertRefRobotRaw(const GaitParam& gaitParam, const cnoid::Position& genFootMidCoords, cnoid::BodyPtr& refRobot, std::vector<cnoid::Position>& refEEPoseFK, double& refdz) const;
 
   // refFootOriginWeightとdefaultTranslatePosとcopOffset.value() に基づいて両足中間座標を求める
-  pinocchio::SE3 calcRefFootMidCoords(const pinocchio::SE3& rleg_, const pinocchio::SE3& lleg_, const GaitParam& gaitParam) const;
+  cnoid::Position calcRefFootMidCoords(const cnoid::Position& rleg_, const cnoid::Position& lleg_, const GaitParam& gaitParam) const;
 };
 
 #endif

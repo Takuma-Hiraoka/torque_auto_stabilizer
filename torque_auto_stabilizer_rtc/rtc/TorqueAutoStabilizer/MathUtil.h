@@ -2,7 +2,8 @@
 #define MathUtil_H
 #include <cmath>
 #include <string>
-#include "pinocchio/spatial/se3.hpp"
+#include <vector>
+#include <cnoid/EigenTypes>
 
 namespace mathutil
 {
@@ -12,13 +13,13 @@ namespace mathutil
   Eigen::Vector3d rpyFromRot(const Eigen::Matrix3d& R);
 
   Eigen::Matrix3d orientCoordToAxis(const Eigen::Matrix3d& m, const Eigen::Vector3d& axis, const Eigen::Vector3d& localaxis = Eigen::Vector3d::UnitZ());
-  pinocchio::SE3 orientCoordToAxis(const pinocchio::SE3& m, const Eigen::Vector3d& axis, const Eigen::Vector3d& localaxis = Eigen::Vector3d::UnitZ());
+  cnoid::Position orientCoordToAxis(const cnoid::Position& m, const Eigen::Vector3d& axis, const Eigen::Vector3d& localaxis = Eigen::Vector3d::UnitZ());
   Eigen::AngleAxisd slerp(const Eigen::AngleAxisd& M1, const Eigen::AngleAxisd& M2, double r);
 
   // coordsとweightsのサイズは同じでなければならない
   Eigen::Matrix3d calcMidRot(const std::vector<Eigen::Matrix3d>& coords, const std::vector<double>& weights);
 
-  pinocchio::SE3 calcMidCoords(const std::vector<pinocchio::SE3>& coords, const std::vector<double>& weights);
+  cnoid::Position calcMidCoords(const std::vector<cnoid::Position>& coords, const std::vector<double>& weights);
 
   template<typename T>
   inline T clamp(const T& value, const T& limit_value) {
@@ -341,11 +342,11 @@ namespace mathutil
 
   // for Eigen::Transform<double, 3, Eigen::AffineCompact>
   class TwoPointInterpolatorSE3 {
-    using Position = pinocchio::SE3;
+    using Position = cnoid::Position;
   public:
     TwoPointInterpolatorSE3(const Position& init_x, const Eigen::Matrix<double, 6, 1>& init_v, const Eigen::Matrix<double, 6, 1>& init_a, interpolation_mode imode=HOFFARBIB) :
       p(init_x.translation(),init_v.head<3>(), init_a.head<3>(), imode),
-      R(init_x.rotation(),init_v.tail<3>(), init_a.tail<3>(), imode) {}
+      R(init_x.linear(),init_v.tail<3>(), init_a.tail<3>(), imode) {}
     void interpolate(double dt){
       p.interpolate(dt);
       R.interpolate(dt);
@@ -353,7 +354,7 @@ namespace mathutil
     Position value() const {
       Position ret;
       ret.translation() = p.value();
-      ret.rotation() = R.value();
+      ret.linear() = R.value();
       return ret;
     }
     void value(Position& x) const {
@@ -362,7 +363,7 @@ namespace mathutil
       p.value(p_x);
       R.value(R_x);
       x.translation() = p_x;
-      x.rotation() = R_x;
+      x.linear() = R_x;
     }
     void value(Position& x, Eigen::Matrix<double, 6, 1>& v) const {
       Eigen::Vector3d p_x, p_v, R_v;
@@ -371,7 +372,7 @@ namespace mathutil
       R.value(R_x,R_v);
       x.translation() = p_x;
       v.head<3>() = p_v;
-      x.rotation() = R_x;
+      x.linear() = R_x;
       v.tail<3>() = R_v;
     }
     void value(Position& x, Eigen::Matrix<double, 6, 1>& v, Eigen::Matrix<double, 6, 1>& a) const {
@@ -382,22 +383,22 @@ namespace mathutil
       x.translation() = p_x;
       v.head<3>() = p_v;
       a.head<3>() = p_a;
-      x.rotation() = R_x;
+      x.linear() = R_x;
       v.tail<3>() = R_v;
       a.tail<3>() = R_a;
     }
     // Reset current value.
     void reset(const Position& x) {
       p.reset(x.translation());
-      R.reset(x.rotation());
+      R.reset(x.linear());
     }
     void reset(const Position& x, const Eigen::Matrix<double, 6, 1>& v) {
       p.reset(x.translation(),v.head<3>());
-      R.reset(x.rotation(),v.tail<3>());
+      R.reset(x.linear(),v.tail<3>());
     }
     void reset(const Position& x, const Eigen::Matrix<double, 6, 1>& v, const Eigen::Matrix<double, 6, 1>& a) {
       p.reset(x.translation(),v.head<3>(),a.head<3>());
-      R.reset(x.rotation(),v.tail<3>(),a.tail<3>());
+      R.reset(x.linear(),v.tail<3>(),a.tail<3>());
     }
     void clear() {
       p.clear();
@@ -414,20 +415,20 @@ namespace mathutil
     };
     void setGoal(const Position& goalx, double t) {
       p.setGoal(goalx.translation(),t);
-      R.setGoal(goalx.rotation(),t);
+      R.setGoal(goalx.linear(),t);
     }
     void setGoal(const Position& goalx, const Eigen::Matrix<double, 6, 1>& goalv, double t) {
       p.setGoal(goalx.translation(),goalv.head<3>(),t);
-      R.setGoal(goalx.rotation(),goalv.tail<3>(),t);
+      R.setGoal(goalx.linear(),goalv.tail<3>(),t);
     }
     void setGoal(const Position& goalx, const Eigen::Matrix<double, 6, 1>& goalv, const Eigen::Matrix<double, 6, 1>& goala, double t) {
       p.setGoal(goalx.translation(),goalv.head<3>(),goala.head<3>(),t);
-      R.setGoal(goalx.rotation(),goalv.tail<3>(),goala.tail<3>(),t);
+      R.setGoal(goalx.linear(),goalv.tail<3>(),goala.tail<3>(),t);
     }
     Position getGoal() const {
       Position ret;
       ret.translation() = p.getGoal();
-      ret.rotation() = R.getGoal();
+      ret.linear() = R.getGoal();
       return ret;
     }
     void getGoal(Position& x) const {
@@ -436,7 +437,7 @@ namespace mathutil
       p.getGoal(p_x);
       R.getGoal(R_x);
       x.translation() = p_x;
-      x.rotation() = R_x;
+      x.linear() = R_x;
     }
     void getGoal(Position& x, Eigen::Matrix<double, 6, 1>& v) const {
       Eigen::Vector3d p_x, p_v, R_v;
@@ -445,7 +446,7 @@ namespace mathutil
       R.getGoal(R_x,R_v);
       x.translation() = p_x;
       v.head<3>() = p_v;
-      x.rotation() = R_x;
+      x.linear() = R_x;
       v.tail<3>() = R_v;
     }
     void getGoal(Position& x, Eigen::Matrix<double, 6, 1>& v, Eigen::Matrix<double, 6, 1>& a) const {
@@ -456,7 +457,7 @@ namespace mathutil
       x.translation() = p_x;
       v.head<3>() = p_v;
       a.head<3>() = p_a;
-      x.rotation() = R_x;
+      x.linear() = R_x;
       v.tail<3>() = R_v;
       a.tail<3>() = R_a;
     }

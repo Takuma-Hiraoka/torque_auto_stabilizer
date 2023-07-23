@@ -4,11 +4,17 @@ find_package(catkin REQUIRED COMPONENTS
   rtmbuild
   torque_auto_stabilizer_msgs
   )
+
+find_package(choreonoid REQUIRED)
+
 include_directories(
   ${catkin_INCLUDE_DIRS}
+  ${CHOREONOID_INCLUDE_DIRS}
   )
 
-find_package(pinocchio REQUIRED)
+link_directories(
+  ${CHOREONOID_LIBRARY_DIRS}
+  )
 
 rtmbuild_add_library(TorqueAutoStabilizer SHARED
   TorqueAutoStabilizer.cpp
@@ -21,7 +27,7 @@ rtmbuild_add_library(TorqueAutoStabilizer SHARED
   )
 target_link_libraries(TorqueAutoStabilizer
   ${catkin_LIBRARIES}
-  pinocchio::pinocchio
+  ${CHOREONOID_BODY_LIBRARIES}
   )
 set_target_properties(TorqueAutoStabilizer PROPERTIES PREFIX "") # libTorqueAutoStabilizer.so -> TorqueAutoStabilizer.so
 add_dependencies(TorqueAutoStabilizer RTMBUILD_${PROJECT_NAME}_genrpc) # wait for rtmbuild_genidl
