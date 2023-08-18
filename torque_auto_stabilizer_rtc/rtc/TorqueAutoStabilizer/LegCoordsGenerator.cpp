@@ -184,6 +184,39 @@ void LegCoordsGenerator::calcLegCoords(const GaitParam& gaitParam, double dt, bo
   o_swingState = swingState;
 }
 
+void LegCoordsGenerator::calcEETargetPose(const GaitParam& gaitParam, double dt,
+                                          std::vector<cnoid::Position>& o_abcEETargetPose, std::vector<cnoid::Vector6>& o_abcEETargetVel, std::vector<cnoid::Vector6>& o_abcEETargetAcc) const{
+  for(int i=0;i<gaitParam.eeName.size();i++){
+    cnoid::Position prevPose = gaitParam.abcEETargetPose[i];
+    cnoid::Vector6 prevVel = gaitParam.abcEETargetVel[i];
+
+    cnoid::Position targetPose;
+    cnoid::Vector6 targetVel;
+    cnoid::Vector6 targetAcc;
+
+    if(i<NUM_LEGS){
+      gaitParam.genCoords[i].value(targetPose, targetVel, targetAcc);
+    }else{
+      targetPose = gaitParam.icEETargetPose[i];
+      if(this->isInitial) targetVel.setZero();
+      else {
+        targetVel.head<3>() = (targetPose.translation() - prevPose.translation()) / dt;
+        Eigen::AngleAxisd dR(targetPose.linear() * prevPose.linear().transpose());  // generate frame.
+        targetVel.tail<3>() = dR.angle() / dt * dR.axis();
+      }
+      if(this->isInitial) targetAcc.setZero();
+      else targetAcc = (targetVel - prevVel) / dt;
+    }
+
+    o_abcEETargetPose[i] = targetPose;
+    o_abcEETargetVel[i] = targetVel;
+    o_abcEETargetAcc[i] = targetAcc;
+  }
+
+  this->isInitial = false;
+  return;
+}
+
 void LegCoordsGenerator::calcCOMCoords(const GaitParam& gaitParam, double dt, cnoid::Vector3& o_genNextCog, cnoid::Vector3& o_genNextCogVel, cnoid::Vector3& o_genNextCogAcc) const{
   cnoid::Vector3 genZmp;
   if(gaitParam.footstepNodesList[0].isSupportPhase[RLEG] || gaitParam.footstepNodesList[0].isSupportPhase[LLEG]){

@@ -607,10 +607,8 @@ bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::Contro
                                    gaitParam.refZmpTraj, gaitParam.genCoords, gaitParam.swingState);
   legCoordsGenerator.calcCOMCoords(gaitParam, dt,
                                    gaitParam.genCog, gaitParam.genCogVel, gaitParam.genCogAcc);
-  for(int i=0;i<gaitParam.eeName.size();i++){
-    if(i<NUM_LEGS) gaitParam.abcEETargetPose[i] = gaitParam.genCoords[i].value();
-    else gaitParam.abcEETargetPose[i] = gaitParam.icEETargetPose[i];
-  }
+  legCoordsGenerator.calcEETargetPose(gaitParam, dt,
+                                      gaitParam.abcEETargetPose, gaitParam.abcEETargetVel, gaitParam.abcEETargetAcc);
 
   // Stabilizer
   if(mode.isSyncToStopSTInit()){ // stopST直後の初回
@@ -631,8 +629,7 @@ bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::Contro
 
   stabilizer.calcResolvedAccelationControl(gaitParam, dt, mode.isSTRunning(), gaitParam.actRobotTqc,
 					   gaitParam.stTargetZmp, gaitParam.stEETargetWrench,
-					   gaitParam.stServoPGainPercentage, gaitParam.stServoDGainPercentage,
-					   gaitParam.prev_q, gaitParam.prev_dq, gaitParam.eePoseDiffLocal_prev, gaitParam.abcEETargetPosed, gaitParam.abcEETargetPosedd, gaitParam.prev_rootd);
+					   gaitParam.stServoPGainPercentage, gaitParam.stServoDGainPercentage);
 
   return true;
 }

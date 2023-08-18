@@ -143,6 +143,8 @@ public:
   cnoid::Vector3 genCogVel;  // generate frame.  abcで計算された目標COM速度
   cnoid::Vector3 genCogAcc;  // generate frame.  abcで計算された目標COM加速度
   std::vector<cnoid::Position> abcEETargetPose; // 要素数と順序はeeNameと同じ.generate frame. abcで計算された目標位置姿勢
+  std::vector<cnoid::Vector6> abcEETargetVel; // 要素数と順序はeeNameと同じ.generate frame. endeffector origin. abcで計算された目標速度
+  std::vector<cnoid::Vector6> abcEETargetAcc; // 要素数と順序はeeNameと同じ.generate frame. endeffector origin. abcで計算された目標加速度
 
   // Stabilizer
   cpp_filters::TwoPointInterpolator<cnoid::Vector3> stOffsetRootRpy = cpp_filters::TwoPointInterpolator<cnoid::Vector3>(cnoid::Vector3::Zero(),cnoid::Vector3::Zero(),cnoid::Vector3::Zero(),cpp_filters::LINEAR);; // gaitParam.footMidCoords座標系. stで計算された目標位置姿勢オフセット
@@ -152,12 +154,6 @@ public:
   std::vector<cpp_filters::TwoPointInterpolator<double> > stServoPGainPercentage; // 要素数と順序はrobot->numJoints()と同じ. 0~100. 現状, setGoal(*,dt)以下の時間でgoal指定するとwriteOutPortDataが破綻する
   std::vector<cpp_filters::TwoPointInterpolator<double> > stServoDGainPercentage; // 要素数と順序はrobot->numJoints()と同じ. 0~100. 現状, setGoal(*,dt)以下の時間でgoal指定するとwriteOutPortDataが破綻する
   cnoid::BodyPtr actRobotTqc; // output. 関節トルク制御用. (actRobotと同じだが、uの値として指令関節トルクが入っている)
-  Eigen::VectorXd prev_q; // not used. genRobot
-  Eigen::VectorXd prev_dq; // refRobot
-  cnoid::Vector6 prev_rootd = cnoid::Vector6::Zero();
-  std::vector<cnoid::Vector6> eePoseDiffLocal_prev;
-  std::vector<cnoid::Position> abcEETargetPosed; // 要素数と順序はeeNameと同じ.generate frame.
-  std::vector<cnoid::Position> abcEETargetPosedd; // 要素数と順序はeeNameと同じ.generate frame.
 
   // FullbodyIKSolver
   cnoid::BodyPtr genRobot; // output. 関節位置制御用
@@ -184,8 +180,6 @@ public:
     for (int i=robot->numJoints()-12;i<robot->numJoints(); i++){ // 指
       jointControllable[i] = false;
     }
-    prev_q = Eigen::VectorXd::Zero(robot->numJoints());
-    prev_dq = Eigen::VectorXd::Zero(robot->numJoints());
     refRobotRaw = robot->clone();
     refRobotRaw->calcForwardKinematics(); refRobotRaw->calcCenterOfMass();
     actRobotRaw = robot->clone();
@@ -215,10 +209,9 @@ public:
     icEEOffset.push_back(cpp_filters::TwoPointInterpolator<cnoid::Vector6>(cnoid::Vector6::Zero(),cnoid::Vector6::Zero(),cnoid::Vector6::Zero(), cpp_filters::HOFFARBIB));
     icEETargetPose.push_back(cnoid::Position::Identity());
     abcEETargetPose.push_back(cnoid::Position::Identity());
+    abcEETargetVel.push_back(cnoid::Vector6::Zero());
+    abcEETargetAcc.push_back(cnoid::Vector6::Zero());
     stEETargetWrench.push_back(cnoid::Vector6::Zero());
-    eePoseDiffLocal_prev.push_back(cnoid::Vector6::Zero());
-    abcEETargetPosed.push_back(cnoid::Position::Identity());
-    abcEETargetPosedd.push_back(cnoid::Position::Identity());
   }
 
   // startAutoStabilizer時に呼ばれる

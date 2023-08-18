@@ -14,6 +14,9 @@ find_package(catkin REQUIRED COMPONENTS
   hrpsys_ros_bridge
   joint_limit_table
   collision_checker_msgs
+  aik_constraint
+  aik_constraint_joint_limit_table
+  prioritized_acc_inverse_kinematics_solver
   torque_auto_stabilizer_msgs
   )
 find_package(choreonoid REQUIRED)

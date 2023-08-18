@@ -31,8 +31,7 @@ bool Stabilizer::execStabilizer(const GaitParam& gaitParam, double dt, bool useA
 
 bool Stabilizer::calcResolvedAccelationControl(const GaitParam& gaitParam, double dt, bool useActState, cnoid::BodyPtr& actRobotTqc, 
 				     cnoid::Vector3& o_stTargetZmp, std::vector<cnoid::Vector6>& o_stEETargetWrench,
-				     std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoPGainPercentage, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoDGainPercentage,
-					       Eigen::VectorXd& prev_q, Eigen::VectorXd& prev_dq, std::vector<cnoid::Vector6>& eePoseDiff_prev, std::vector<cnoid::Position>& eeTargetPosed, std::vector<cnoid::Position>& eeTargetPosedd, cnoid::Vector6& prev_rootd) const{
+				     std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoPGainPercentage, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoDGainPercentage) const{
   // - 現在のactual重心位置から、目標ZMPを計算
   // - 目標位置姿勢を満たすように分解加速度制御. 重心が倒立振子で加速された場合のトルクを計算
   // - 目標のZMPを満たすように目標足裏反力を計算、仮想仕事の原理で足し込む
@@ -43,13 +42,9 @@ bool Stabilizer::calcResolvedAccelationControl(const GaitParam& gaitParam, doubl
   this->calcZMP(gaitParam, dt, useActState, // input
                 o_stTargetZmp, tgtForce, tgtCogAcc); // output
 
-  cnoid::Vector3 root2CogForce; // generate frame
   this->calcTorque(dt, gaitParam, useActState, actRobotTqc, tgtCogAcc,
-		   o_stServoPGainPercentage, o_stServoDGainPercentage,
-		   root2CogForce,
-		   prev_q, prev_dq, eePoseDiff_prev, eeTargetPosed, eeTargetPosedd, prev_rootd);
+		   o_stServoPGainPercentage, o_stServoDGainPercentage);
 
-  tgtForce += root2CogForce;
   // 目標ZMPを満たすように目標EndEffector反力を計算
   this->calcWrench(gaitParam, o_stTargetZmp, tgtForce, useActState,// input
                    actRobotTqc, o_stEETargetWrench); // output
@@ -310,8 +305,7 @@ bool Stabilizer::calcWrench(const GaitParam& gaitParam, const cnoid::Vector3& tg
 }
 
 bool Stabilizer::calcTorque(double dt, const GaitParam& gaitParam, bool useActState, cnoid::BodyPtr& actRobotTqc, const cnoid::Vector3& targetCogAcc,
-                            std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoPGainPercentage, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoDGainPercentage, cnoid::Vector3& root2CogForce,
-			    Eigen::VectorXd& prev_q, Eigen::VectorXd& prev_dq, std::vector<cnoid::Vector6>& eePoseDiff_prev, std::vector<cnoid::Position>& eeTargetPosed, std::vector<cnoid::Position>& eeTargetPosedd, cnoid::Vector6& prev_rootd) const{
+                            std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoPGainPercentage, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoDGainPercentage) const{
 
   if(!useActState){
     for(int i=0;i<actRobotTqc->numJoints();i++) actRobotTqc->joint(i)->u() = 0.0;
@@ -343,297 +337,197 @@ bool Stabilizer::calcTorque(double dt, const GaitParam& gaitParam, bool useActSt
       }
     }
 
+    // actRobotTqcのq,dqにactualの値を入れる
     {
-      this->eeComTask_->A() = Eigen::SparseMatrix<double, Eigen::RowMajor>(6 * gaitParam.eeName.size() + 3,6 + actRobotTqc->numJoints());
-      std::vector<Eigen::Triplet<double> > eeComTripletList_A;
-      eeComTripletList_A.reserve(500);//適当
-      this->eeComTask_->b() = Eigen::VectorXd::Zero(6 * gaitParam.eeName.size() + 3);
-      this->eeComTask_->C() = Eigen::SparseMatrix<double, Eigen::RowMajor>(6 + actRobotTqc->numJoints(),6 + actRobotTqc->numJoints());
-      std::vector<Eigen::Triplet<double> > eeComTripletList_C;
-      // エンドエフェクタ分解加速度制御
-      // ee_acc = ee_acc_ref + K (ee_p_ref - ee_p_act) + D (ee_vel_ref - ee_vel_act)
-      // ee_vel = J * dq
-      // ee_acc = J * ddq + dJ * dq
-      // ここで dJ * dq はddq = 0 としたときのee_accだから、q, dqをもとにForwardKinematicsで求められる
-      // J * ddq = ee_acc - dJ * dq を満たすddqを求めて、actualのq, dqと合わせてInverseDynamicsでuを求める
-      
-      {
-	std::vector<cnoid::Vector6> ee_acc;
-	ee_acc.resize(gaitParam.eeName.size());
-	// ee_act
-	{
-	  for(int i=0;i<gaitParam.eeName.size();i++){
-	    // ee_act_ref
-	    ee_acc[i].head<3>() = (gaitParam.abcEETargetPose[i].translation() - 2 * eeTargetPosed[i].translation() + eeTargetPosedd[i].translation()) / dt / dt;
-	    ee_acc[i].tail<3>() = (cnoid::rpyFromRot(gaitParam.abcEETargetPose[i].linear() * eeTargetPosed[i].linear().transpose()) - cnoid::rpyFromRot(eeTargetPosed[i].linear() * eeTargetPosedd[i].linear().transpose())) / dt / dt; // TODO
-	    // K (ee_p_ref - ee_p_act) + D (ee_vel_ref - ee_vel_act)
-	    cnoid::Matrix3 eeR = gaitParam.actEEPose[i].linear();
-	    cnoid::Vector6 eePoseDiffLocal; // endEfector frame
-	    eePoseDiffLocal.head<3>() = eeR.transpose() * (gaitParam.abcEETargetPose[i].translation() - gaitParam.actEEPose[i].translation());
-	    cnoid::AngleAxis angleAxis = cnoid::AngleAxis(gaitParam.actEEPose[i].linear().transpose()*gaitParam.abcEETargetPose[i].linear());
-	    eePoseDiffLocal.tail<3>() = angleAxis.angle()*angleAxis.axis();
-	    cnoid::Vector6 eeVelDiffLocal = (eePoseDiffLocal - eePoseDiff_prev[i]) / dt;
-	    cnoid::Vector6 eePoseDiffGainLocal;
-	    cnoid::Vector6 eeVelDiffGainLocal;
-	    for(int j=0;j<6;j++){
-	      eePoseDiffGainLocal[j] = this->ee_K[i][j] * eePoseDiffLocal[j];
-	      eeVelDiffGainLocal[j] = this->ee_D[i][j] * eeVelDiffLocal[j];
-	    }
-	    ee_acc[i].head<3>() += eeR * eePoseDiffGainLocal.head<3>(); // generate frame
-	    ee_acc[i].tail<3>() += eeR * eePoseDiffGainLocal.tail<3>(); // generate frame
-	    ee_acc[i].head<3>() += eeR * eeVelDiffGainLocal.head<3>(); // generate frame
-	    ee_acc[i].tail<3>() += eeR * eeVelDiffGainLocal.tail<3>(); // generate frame
-	    if (ee_acc[i].head<3>().norm() > this->ee_dv_limit) ee_acc[i].head<3>() = ee_acc[i].head<3>() / ee_acc[i].head<3>().norm() * this->ee_dv_limit;
-	    if (ee_acc[i].tail<3>().norm() > this->ee_dw_limit) ee_acc[i].tail<3>() = ee_acc[i].tail<3>() / ee_acc[i].tail<3>().norm() * this->ee_dw_limit;
-
-	    eePoseDiff_prev[i] = eePoseDiffLocal;
-	  }
-	} // ee_act
-
-	std::vector<cnoid::Vector6> dJdq;
-	dJdq.resize(gaitParam.eeName.size());
-	// dJ * dqを求める
-	{
-	  actRobotTqc->rootLink()->T() = gaitParam.actRobot->rootLink()->T();
-	  actRobotTqc->rootLink()->v() = gaitParam.actRootVel.value().head<3>();
-	  actRobotTqc->rootLink()->w() = gaitParam.actRootVel.value().tail<3>();
-	  actRobotTqc->rootLink()->dv() = cnoid::Vector3::Zero();
-	  actRobotTqc->rootLink()->dw() = cnoid::Vector3::Zero();
-	  for(int i=0;i<actRobotTqc->numJoints();i++){
-	    actRobotTqc->joint(i)->q() = gaitParam.actRobot->joint(i)->q();
-	    // dqとしてactualを使うと振動する可能性があるが、referenceを使うと外力による駆動を考慮できない
-	    // actRobotTqc->joint(i)->dq() = (gaitParam.genRobot->joint(i)->q() - prev_q[i]) / dt;
-	    actRobotTqc->joint(i)->dq() = gaitParam.actRobot->joint(i)->dq();
-	    actRobotTqc->joint(i)->ddq() = 0.0;
-	  }
-	  actRobotTqc->calcForwardKinematics(true, true); // actRobotTqc->link(gaitParam.eeParentLink[i])->dv(), dw()が更新される
-	  actRobotTqc->calcCenterOfMass();
-	  for(int i=0;i<gaitParam.eeName.size();i++){
-	    cnoid::Vector3 arm = actRobotTqc->link(gaitParam.eeParentLink[i])->R() * gaitParam.eeLocalT[i].translation();
-	    cnoid::Vector3 ee_dv = actRobotTqc->link(gaitParam.eeParentLink[i])->dv() + actRobotTqc->link(gaitParam.eeParentLink[i])->w().cross(actRobotTqc->link(gaitParam.eeParentLink[i])->w().cross(arm)) + actRobotTqc->link(gaitParam.eeParentLink[i])->dw().cross(arm);
-	    cnoid::Vector3 ee_dw = actRobotTqc->link(gaitParam.eeParentLink[i])->dw();
-	    dJdq[i].head<3>() = ee_dv;
-	    dJdq[i].tail<3>() = ee_dw;
-	  }
-	} // dJ * dq
-
-	{ // eeComTaskを作る
-	  for(int i=0;i<gaitParam.eeName.size();i++){
-
-	    // AはJacobian
-	    cnoid::JointPath jointPath(actRobotTqc->rootLink(), actRobotTqc->link(gaitParam.eeParentLink[i]));
-	    cnoid::MatrixXd J = cnoid::MatrixXd::Zero(6,jointPath.numJoints()); // generate frame. endeffector origin
-	    cnoid::setJacobian<0x3f,0,0,true>(jointPath,actRobotTqc->link(gaitParam.eeParentLink[i]),gaitParam.eeLocalT[i].translation(), // input
-					      J); // output
-
-	    // 該当する箇所に代入
-	    for (int j=0;j<jointPath.numJoints();j++) {
-	      for(int k=0;k<6;k++){
-		eeComTripletList_A.push_back(Eigen::Triplet<double>(k + 6*i,6+jointPath.joint(j)->jointId(),J(k,j))); // insertすると時間がかかる
-	      }
-	    }
-	  
-	    for(int j=0;j<6;j++) eeComTripletList_A.push_back(Eigen::Triplet<double>(j + 6*i,j,1.0)); // insertすると時間がかかる
-	    cnoid::Vector3 dp = (actRobotTqc->link(gaitParam.eeParentLink[i])->T() * gaitParam.eeLocalT[i]).translation() - actRobotTqc->rootLink()->p();
-	    eeComTripletList_A.push_back(Eigen::Triplet<double>(0 + 6*i,4, dp[2]));
-	    eeComTripletList_A.push_back(Eigen::Triplet<double>(0 + 6*i,5,-dp[1]));
-	    eeComTripletList_A.push_back(Eigen::Triplet<double>(1 + 6*i,3,-dp[2]));
-	    eeComTripletList_A.push_back(Eigen::Triplet<double>(1 + 6*i,5, dp[0]));
-	    eeComTripletList_A.push_back(Eigen::Triplet<double>(2 + 6*i,3, dp[1]));
-	    eeComTripletList_A.push_back(Eigen::Triplet<double>(2 + 6*i,4,-dp[0]));
-
-	    // bはee_acc - dJ * dq
-	    this->eeComTask_->b().block(i*6,0,6,1) = ee_acc[i] - dJdq[i];
-	  
-	  }
-
-	  for(int i=0;i<6+actRobotTqc->numJoints();i++){
-	    eeComTripletList_C.push_back(Eigen::Triplet<double>(i,i,1.0)); // insertすると時間がかかる
-	  }
-	} // eeTask
-      } // ee 分解加速度制御
-
-      // 重心分解加速度制御
-      // com_acc = com_acc_ref + K (com_p_ref - com_p_act) + D (com_vel_ref - com_vel_act)
-      // com_vel = J * dq
-      // com_acc = J * ddq + dJ * dq
-      // ここで dJ * dq はddq = 0 としたときのcom_accだから、q, dqをもとにForwardKinematicsで求められる
-      // J * ddq = com_acc - dJ * dq を満たすddqを求めて、actualのq, dqと合わせてInverseDynamicsでuを求める
-      {
-	cnoid::Vector3 com_acc;
-	// com_act
-	{
-	  cnoid::Vector3 actCog = actRobotTqc->centerOfMass();
-	  for(int i=0;i<3;i++){
-	    com_acc[i] = targetCogAcc[i] + this->com_K[i] * (gaitParam.genCog[i] - actCog[i]) + this->com_D[i] * (gaitParam.genCogVel[i] - gaitParam.actCogVel.value()[i]); // TODO genCogではなくstで出されたcogをつかうこと
-	  }
-	}
-
-	cnoid::Vector3 dJdq;
-	// dJ * dqを求める
-	{
-	  dJdq = cnoid::Vector3::Zero();
-	  actRobotTqc->rootLink()->T() = gaitParam.actRobot->rootLink()->T();
-	  actRobotTqc->rootLink()->v() = gaitParam.actRootVel.value().head<3>();
-	  actRobotTqc->rootLink()->w() = gaitParam.actRootVel.value().tail<3>();
-	  actRobotTqc->rootLink()->dv() = cnoid::Vector3::Zero();
-	  actRobotTqc->rootLink()->dw() = cnoid::Vector3::Zero();
-	  for(int i=0;i<actRobotTqc->numJoints();i++){
-	    actRobotTqc->joint(i)->q() = gaitParam.actRobot->joint(i)->q();
-	    // dqとしてactualを使うと振動する可能性があるが、referenceを使うと外力による駆動を考慮できない
-	    // actRobotTqc->joint(i)->dq() = (gaitParam.genRobot->joint(i)->q() - prev_q[i]) / dt;
-	    actRobotTqc->joint(i)->dq() = gaitParam.actRobot->joint(i)->dq();
-	    actRobotTqc->joint(i)->ddq() = 0.0;
-	  }
-	  actRobotTqc->calcForwardKinematics(true, true);
-	  actRobotTqc->calcCenterOfMass();
-	  cnoid::Vector6 virtualWrench = cnoid::calcInverseDynamics(actRobotTqc->rootLink());
-	  dJdq = virtualWrench.head<3>() / gaitParam.actRobot->mass();
-	  dJdq += virtualWrench.tail<3>().cross(actRobotTqc->centerOfMass()) / gaitParam.actRobot->mass();
-	}
-
-	{ // comTaskを作る
-	  cnoid::MatrixXd CMJ = cnoid::MatrixXd::Zero(3,6 + actRobotTqc->numJoints());
-	  cnoid::calcCMJacobian(actRobotTqc,nullptr,CMJ); //仕様でrootは後ろにつくので注意
-	  for (int i=0;i<actRobotTqc->numJoints();i++) {
-              for(int j=0;j<3;j++) {
-                  eeComTripletList_A.push_back(Eigen::Triplet<double>(6 * gaitParam.eeName.size() + j,6+i,CMJ(j,i)));
-              }
-	  }
-	  for (int i=0;i<6;i++) {
-	    for(int j=0;j<3;j++) {
-	      eeComTripletList_A.push_back(Eigen::Triplet<double>(6 * gaitParam.eeName.size() + j,i,CMJ(j,i + actRobotTqc->numJoints())));
-	    }
-	  }
-	  this->eeComTask_->b().tail<3>() = com_acc - dJdq;
-	}
+      actRobotTqc->rootLink()->T() = gaitParam.actRobot->rootLink()->T();
+      actRobotTqc->rootLink()->v() = gaitParam.actRobot->rootLink()->v();
+      actRobotTqc->rootLink()->w() = gaitParam.actRobot->rootLink()->w();
+      actRobotTqc->rootLink()->dv().setZero();
+      actRobotTqc->rootLink()->dw().setZero();
+      for(int i=0;i<actRobotTqc->numJoints();i++){
+	actRobotTqc->joint(i)->q() = gaitParam.actRobot->joint(i)->q();
+	actRobotTqc->joint(i)->dq() = gaitParam.actRobot->joint(i)->dq();
+	actRobotTqc->joint(i)->ddq() = 0.0;
+	actRobotTqc->joint(i)->u() = 0.0;
       }
-      this->eeComTask_->A().setFromTriplets(eeComTripletList_A.begin(), eeComTripletList_A.end());
-      this->eeComTask_->C().setFromTriplets(eeComTripletList_C.begin(), eeComTripletList_C.end());
-      this->eeComTask_->wa() = Eigen::VectorXd::Ones(6 * gaitParam.eeName.size() + 3);
-      this->eeComTask_->dl() = -Eigen::VectorXd::Ones(6 + actRobotTqc->numJoints()) * this->defaultDdqLimit;
-      this->eeComTask_->du() = Eigen::VectorXd::Ones(6 + actRobotTqc->numJoints()) * this->defaultDdqLimit;
-      for (int i = 0;i<actRobotTqc->numJoints();i++) {
-	this->eeComTask_->dl()[6+i] = -this->ddq_limit[i];
-	this->eeComTask_->du()[6+i] = this->ddq_limit[i];
+      for(int l=0;l<actRobotTqc->numLinks();l++) actRobotTqc->link(l)->F_ext().setZero();
+      actRobotTqc->calcForwardKinematics(true,true);
+      actRobotTqc->calcCenterOfMass();
+    }
+
+
+    // jointControllableの関節のみ、探索変数にする
+    std::vector<cnoid::LinkPtr> variables; variables.reserve(1+actRobotTqc->numJoints());
+    variables.push_back(actRobotTqc->rootLink());
+    for(size_t i=0;i<actRobotTqc->numJoints();i++){
+      if(gaitParam.jointControllable[i]) {
+        variables.push_back(actRobotTqc->joint(i));
       }
-      this->eeComTask_->wc() = cnoid::VectorX::Ones(6 + actRobotTqc->numJoints());
-      this->eeComTask_->w() = cnoid::VectorX::Ones(6 + actRobotTqc->numJoints()) * 1e-6;
-      this->eeComTask_->toSolve() = true;
-      this->eeComTask_->settings().check_termination = 15; // default 25. 高速化
-      this->eeComTask_->settings().verbose = 0;
+    }
 
-      // jointPDTask
-      // (角)加速度でのPD制御
-      {
-	// jointPDTaskを作る
-	this->jointPDTask_->A() = Eigen::SparseMatrix<double, Eigen::RowMajor>(6 + actRobotTqc->numJoints(),6 + actRobotTqc->numJoints());
-	std::vector<Eigen::Triplet<double> > tripletList_A;
-	for (int i=0;i<6 + actRobotTqc->numJoints();i++){
-	  tripletList_A.push_back(Eigen::Triplet<double>(i,i,1.0));
-	}
-	this->jointPDTask_->b() = cnoid::VectorXd::Zero(6 + actRobotTqc->numJoints());
-	for (int i=0;i<3;i++){
-	  this->jointPDTask_->b()[i] = (gaitParam.refRobot->rootLink()->v()[i] - prev_rootd[i]) / dt + this->refAngle_K[i] * (gaitParam.refRobot->rootLink()->p()[i] - gaitParam.actRobot->rootLink()->p()[i]) + this->refAngle_D[i] * (gaitParam.refRobot->rootLink()->v()[i] - gaitParam.actRootVel.value()[i]);
-	}
-	cnoid::AngleAxis rootAngleAxis = cnoid::AngleAxis(gaitParam.refRobot->rootLink()->R() * gaitParam.actRobot->rootLink()->R().transpose());
-	cnoid::Vector3 rootRpyDiff = rootAngleAxis.angle()*rootAngleAxis.axis();
-	for (int i=0;i<3;i++){
-	  this->jointPDTask_->b()[i+3] = (gaitParam.refRobot->rootLink()->w()[i] - prev_rootd[i+3]) / dt + this->refAngle_K[i+3] * rootRpyDiff[i]  + this->refAngle_D[i+3] * (gaitParam.refRobot->rootLink()->w()[i] - gaitParam.actRootVel.value()[i+3]);
-	}
-	// refRobotに追従
-	for (int i=0;i<actRobotTqc->numJoints();i++){
-	  this->jointPDTask_->b()[i+6] = (gaitParam.refRobot->joint(i)->dq() - prev_dq[i]) / dt + this->refAngle_K[i+6] * (gaitParam.refRobot->joint(i)->q() - gaitParam.actRobot->joint(i)->q()) + this->refAngle_D[i+6] * (gaitParam.refRobot->joint(i)->dq() - gaitParam.actRobot->joint(i)->dq());
-	}
+    std::vector<std::shared_ptr<aik_constraint::IKConstraint> > ikConstraint0;
 
-	this->jointPDTask_->wa() = cnoid::VectorXd::Ones(6 + actRobotTqc->numJoints());
-	this->jointPDTask_->C() = Eigen::SparseMatrix<double, Eigen::RowMajor>(6 + actRobotTqc->numJoints(),6 + actRobotTqc->numJoints());
-	std::vector<Eigen::Triplet<double> > tripletList_C;
-	for (int i=0;i<6 + actRobotTqc->numJoints();i++){
-	  tripletList_C.push_back(Eigen::Triplet<double>(i,i,1.0));
-	}
-	this->jointPDTask_->A().setFromTriplets(tripletList_A.begin(), tripletList_A.end());
-        this->jointPDTask_->C().setFromTriplets(tripletList_C.begin(), tripletList_C.end());
-	this->jointPDTask_->dl() = - Eigen::VectorXd::Ones(6 + actRobotTqc->numJoints()) * this->defaultDdqLimit;
-	this->jointPDTask_->du() = Eigen::VectorXd::Ones(6 + actRobotTqc->numJoints()) * this->defaultDdqLimit;
-	for (int i = 0;i<actRobotTqc->numJoints();i++) {
-	  this->jointPDTask_->dl()[6+i] = -this->ddq_limit[i];
-	  this->jointPDTask_->du()[6+i] = this->ddq_limit[i];
-	}
-	this->jointPDTask_->wc() = cnoid::VectorX::Ones(6 + actRobotTqc->numJoints());
-	this->jointPDTask_->w() = cnoid::VectorXd::Ones(6 + actRobotTqc->numJoints()) * 1e-6;
-	this->jointPDTask_->toSolve() = true;
-	this->jointPDTask_->settings().check_termination = 15; // default 25. 高速化
-	this->jointPDTask_->settings().verbose = 0;
-      }      
+    // joint limit
+    for(size_t i=0;i<actRobotTqc->numJoints();i++){
+      if(!gaitParam.jointControllable[i]) continue;
+      this->aikJointLimitConstraint[i]->joint() = actRobotTqc->joint(i);
+      this->aikJointLimitConstraint[i]->jointLimitTables() = gaitParam.jointLimitTables[i];
+      this->aikJointLimitConstraint[i]->pgain() = 400;
+      this->aikJointLimitConstraint[i]->dgain() = 100;
+      this->aikJointLimitConstraint[i]->maxAccByVelError() = 20.0;
+      this->aikJointLimitConstraint[i]->weight() = 0.1;
+      ikConstraint0.push_back(this->aikJointLimitConstraint[i]);
+    }
 
-      // ddqを計算
-      std::vector<std::shared_ptr<prioritized_qp_base::Task> > tasks;
-      tasks.push_back(this->eeComTask_);
-      tasks.push_back(this->jointPDTask_);
+    std::vector<std::shared_ptr<aik_constraint::IKConstraint> > ikConstraint1;
+    // self Collision TODO
+
+    std::vector<std::shared_ptr<aik_constraint::IKConstraint> > ikConstraint2;
+    std::vector<std::shared_ptr<aik_constraint::IKConstraint> > ikConstraint3;
+
+    for(int i=0;i<gaitParam.eeName.size();i++){
+      this->aikEEPositionConstraint[i]->A_link() = actRobotTqc->link(gaitParam.eeParentLink[i]);
+      this->aikEEPositionConstraint[i]->A_localpos() = gaitParam.eeLocalT[i];
+      this->aikEEPositionConstraint[i]->B_link() = nullptr;
+      this->aikEEPositionConstraint[i]->eval_link() = actRobotTqc->link(gaitParam.eeParentLink[i]); // local 座標系でerrorやgainを評価
+      this->aikEEPositionConstraint[i]->eval_localR() = gaitParam.eeLocalT[i].linear(); // local 座標系でerrorやgainを評価
+
+      if(i < NUM_LEGS && 
+         (gaitParam.footstepNodesList[0].isSupportPhase[i] || // 支持脚
+          gaitParam.footstepNodesList[0].stopCurrentPosition[i])) { // 早付き
+        // 加速させない
+        this->aikEEPositionConstraint[i]->pgain().setZero();
+        this->aikEEPositionConstraint[i]->B_localvel().setZero();
+        this->aikEEPositionConstraint[i]->dgain() = this->ee_support_D[i];
+        this->aikEEPositionConstraint[i]->ref_acc().setZero();
+        this->aikEEPositionConstraint[i]->weight() = 3.0 * cnoid::Vector6::Ones();
+        ikConstraint2.push_back(this->aikEEPositionConstraint[i]);
+      }else if(i < NUM_LEGS &&
+               gaitParam.isManualControlMode[i].getGoal() == 0.0){ // 遊脚
+        if(gaitParam.swingState[i] == GaitParam::DOWN_PHASE){
+          this->aikEEPositionConstraint[i]->pgain() = this->ee_landing_K[i];
+          this->aikEEPositionConstraint[i]->dgain() = this->ee_landing_D[i];
+        }else{
+          this->aikEEPositionConstraint[i]->pgain() = this->ee_swing_K[i];
+          this->aikEEPositionConstraint[i]->dgain() = this->ee_swing_D[i];
+        }
+        this->aikEEPositionConstraint[i]->B_localpos() = gaitParam.abcEETargetPose[i];
+        this->aikEEPositionConstraint[i]->B_localvel() = gaitParam.abcEETargetVel[i];
+        this->aikEEPositionConstraint[i]->ref_acc() = gaitParam.abcEETargetAcc[i];
+        this->aikEEPositionConstraint[i]->weight() = 1.0 * cnoid::Vector6::Ones();
+        ikConstraint2.push_back(this->aikEEPositionConstraint[i]);
+      }else{ // maniulation arm/leg
+        this->aikEEPositionConstraint[i]->pgain() = this->ee_K[i];
+        this->aikEEPositionConstraint[i]->dgain() = this->ee_D[i];
+        this->aikEEPositionConstraint[i]->B_localpos() = gaitParam.abcEETargetPose[i];
+        this->aikEEPositionConstraint[i]->B_localvel() = gaitParam.abcEETargetVel[i];
+        this->aikEEPositionConstraint[i]->ref_acc() = gaitParam.abcEETargetAcc[i];
+        this->aikEEPositionConstraint[i]->weight() = 0.3 * cnoid::Vector6::Ones();
+        ikConstraint3.push_back(this->aikEEPositionConstraint[i]); // low prioritiy
+      }
+    }
+
+    {
+      // task: COM to target
+      this->aikComConstraint->A_robot() = actRobotTqc;
+      this->aikComConstraint->pgain().setZero(); // footguidedで計算された加速をそのまま使う
+      this->aikComConstraint->dgain().setZero(); // footguidedで計算された加速をそのまま使う
+      this->aikComConstraint->ref_acc() = targetCogAcc; // footguidedで計算された加速をそのまま使う
+      this->aikComConstraint->weight() << 3.0, 3.0, 0.3; // 0.1, wn=1e-4だと、wnに負けて不正確になる
+      ikConstraint2.push_back(this->aikComConstraint);
+    }
+    {
+      // root
+      this->aikRootPositionConstraint->A_link() = actRobotTqc->rootLink();
+      this->aikRootPositionConstraint->B_link() = nullptr;
+      this->aikRootPositionConstraint->pgain().head<3>().setZero(); // 傾きのみ
+      this->aikRootPositionConstraint->pgain().tail<3>() = this->root_K;
+      this->aikRootPositionConstraint->dgain().head<3>().setZero(); // 傾きのみ
+      this->aikRootPositionConstraint->dgain().tail<3>() = this->root_D;
+      this->aikRootPositionConstraint->B_localpos() = gaitParam.refRobot->rootLink()->T();
+      this->aikRootPositionConstraint->B_localvel().tail<3>() = gaitParam.refRobot->rootLink()->w();
+      this->aikRootPositionConstraint->ref_acc().tail<3>() = gaitParam.refRobot->rootLink()->dw();
+      this->aikRootPositionConstraint->eval_link() = actRobotTqc->rootLink(); // local 座標系でerrorやgainを評価
+      this->aikRootPositionConstraint->weight().head<3>().setZero(); // 傾きのみ
+      this->aikRootPositionConstraint->weight().tail<3>() = 0.3 * cnoid::Vector3::Ones();
+      ikConstraint2.push_back(this->aikRootPositionConstraint);
+    }
+
+    std::vector<std::shared_ptr<aik_constraint::IKConstraint> > ikConstraint4;
+    {
+      // task: angular momentum to zero
+      this->aikAngularMomentumConstraint->robot() = actRobotTqc;
+      this->aikAngularMomentumConstraint->weight() << 0.1, 0.1, 0.1; // yaw旋回歩行するときのために、Zは小さく. rollとpitchも、joint angle taskの方を優先したほうがよい
+      ikConstraint4.push_back(this->aikAngularMomentumConstraint);
+    }
+    {
+      // task: joint angle to target
+      for(int i=0;i<actRobotTqc->numJoints();i++){
+        if(!gaitParam.jointControllable[i]) continue;
+        this->aikRefJointAngleConstraint[i]->joint() = actRobotTqc->joint(i);
+        this->aikRefJointAngleConstraint[i]->targetq() = gaitParam.refRobot->joint(i)->q();
+        this->aikRefJointAngleConstraint[i]->targetdq() = gaitParam.refRobot->joint(i)->dq();
+        this->aikRefJointAngleConstraint[i]->ref_acc() = gaitParam.refRobot->joint(i)->ddq();
+        this->aikRefJointAngleConstraint[i]->pgain() = this->joint_K[i] * std::pow(this->aikdqWeight[i].value(), 2);
+        this->aikRefJointAngleConstraint[i]->maxAccByPosError() = 3.0;
+        this->aikRefJointAngleConstraint[i]->dgain() = this->joint_D[i] * this->aikdqWeight[i].value();
+        this->aikRefJointAngleConstraint[i]->maxAccByVelError() = 10.0;
+        this->aikRefJointAngleConstraint[i]->weight() = 0.3 * this->aikdqWeight[i].value();
+        ikConstraint4.push_back(this->aikRefJointAngleConstraint[i]);
+      }
+    }
+
+    int debugLevel = 0; // 0 or 1
+    std::vector<std::vector<std::shared_ptr<aik_constraint::IKConstraint> > > constraints{ikConstraint0,ikConstraint1,ikConstraint2,ikConstraint3,ikConstraint4};
+    for(size_t i=0;i<constraints.size();i++){
+      for(size_t j=0;j<constraints[i].size();j++){
+        constraints[i][j]->debugLevel() = debugLevel;
+      }
+    }
+
+    prioritized_acc_inverse_kinematics_solver::IKParam param;
+    param.debugLevel = debugLevel;
+    param.wn = 1e-4;
+    param.we = 1e-6;
+    bool solved = prioritized_acc_inverse_kinematics_solver::solveAIK(variables,
+                                                                      constraints,
+                                                                      aikTasks,
+                                                                      param);
 	
-      cnoid::VectorX result;
-      if(!prioritized_qp_base::solve(tasks,
-				     result,
-				     0 // debuglevel
-				     )){
-	std::cerr << "fail" << std::endl; // TODO
-      }else {
-	// ddqを代入
-	actRobotTqc->rootLink()->T() = gaitParam.actRobot->rootLink()->T();
-	actRobotTqc->rootLink()->v() = gaitParam.actRootVel.value().head<3>();
-	actRobotTqc->rootLink()->w() = gaitParam.actRootVel.value().tail<3>();
-	actRobotTqc->rootLink()->dv() = result.segment(0,3);//  << result[0], result[1], result[2];
-	actRobotTqc->rootLink()->dw() = result.segment(3,3);// << result[3], result[4], result[5];
-	for(int i=0;i<actRobotTqc->numJoints();i++){
-	  actRobotTqc->joint(i)->q() = gaitParam.actRobot->joint(i)->q();
-	  // dqとしてactualを使うと振動する可能性があるが、referenceを使うと外力による駆動を考慮できない
-	  // actRobotTqc->joint(i)->dq() = (gaitParam.genRobot->joint(i)->q() - prev_q[i]) / dt;
-	  actRobotTqc->joint(i)->dq() = gaitParam.actRobot->joint(i)->dq();
-	  actRobotTqc->joint(i)->ddq() = result[6+i];
-	}
-	actRobotTqc->calcForwardKinematics(true, true);
-	actRobotTqc->calcCenterOfMass();
-	cnoid::calcInverseDynamics(actRobotTqc->rootLink()); // actRobotTqc->joint()->u()に書き込まれる
-	for(int i=0;i<actRobotTqc->numJoints();i++){
-	  tau_ee[i] = actRobotTqc->joint(i)->u();
-	  actRobotTqc->joint(i)->u() = 0.0;
-	}
-	cnoid::Vector3 arm = actRobotTqc->centerOfMass() - actRobotTqc->rootLink()->p();
-	cnoid::Vector3 cogAccFromRot = actRobotTqc->rootLink()->w().cross(actRobotTqc->rootLink()->w().cross(arm)) + actRobotTqc->rootLink()->dw().cross(arm);
-	root2CogForce = - cogAccFromRot * actRobotTqc->mass();
-      }      
+    if(!solved){
+      std::cerr << "fail" << std::endl; // TODO
+    }else {
+      actRobotTqc->calcForwardKinematics(true, true);
+      actRobotTqc->calcCenterOfMass();
+      cnoid::calcInverseDynamics(actRobotTqc->rootLink()); // actRobotTqc->joint()->u()に書き込まれる
+      for(int i=0;i<actRobotTqc->numJoints();i++){
+	tau_ee[i] = actRobotTqc->joint(i)->u();
+	actRobotTqc->joint(i)->u() = 0.0;
+      }
     }
 
     // 最終的な出力トルクを代入
     for(int i=0;i<actRobotTqc->numJoints();i++){
       actRobotTqc->joint(i)->u() = tau_g[i] +  tau_ee[i];
     }
+    
+    // std::cerr << "tau_g" << std::endl; 
+    // for(int i=0;i<actRobotTqc->numJoints();i++){
+    //   std::cerr << tau_g[i] << " ";
+    // }
+    // std::cerr << std::endl;
 
-    /*
-    std::cerr << "tau_g" << std::endl; 
-    for(int i=0;i<actRobotTqc->numJoints();i++){
-      std::cerr << tau_g[i] << " ";
-    }
-    std::cerr << std::endl;
+    // std::cerr << "tau_ee" << std::endl; 
+    // for(int i=0;i<actRobotTqc->numJoints();i++){
+    //   std::cerr << tau_ee[i] << " ";
+    // }
+    // std::cerr << std::endl;
 
-    std::cerr << "tau_lip" << std::endl; 
-    for(int i=0;i<actRobotTqc->numJoints();i++){
-      std::cerr << tau_lip[i] << " ";
-    }
-    std::cerr << std::endl;
-
-    std::cerr << "tau_ee" << std::endl; 
-    for(int i=0;i<actRobotTqc->numJoints();i++){
-      std::cerr << tau_ee[i] << " ";
-    }
-    std::cerr << std::endl;
-
-    std::cerr << "tau" << std::endl; 
-    for(int i=0;i<actRobotTqc->numJoints();i++){
-      std::cerr << actRobotTqc->joint(i)->u() << " ";
-    }
-    std::cerr << std::endl;*/
+    // std::cerr << "tau" << std::endl; 
+    // for(int i=0;i<actRobotTqc->numJoints();i++){
+    //   std::cerr << actRobotTqc->joint(i)->u() << " ";
+    // }
+    // std::cerr << std::endl;
     
     // Gain
     {
@@ -673,8 +567,8 @@ bool Stabilizer::calcTorque(double dt, const GaitParam& gaitParam, bool useActSt
 	cnoid::JointPath jointPath(actRobotTqc->rootLink(), actRobotTqc->link(gaitParam.eeParentLink[i]));
 	double arm_gain = 0.0;
 	for(int j=0;j<jointPath.numJoints();j++){
-	  if(o_stServoPGainPercentage[jointPath.joint(j)->jointId()].getGoal() != arm_gain) o_stServoPGainPercentage[jointPath.joint(j)->jointId()].setGoal(arm_gain, 3.0);
-	  if(o_stServoDGainPercentage[jointPath.joint(j)->jointId()].getGoal() != arm_gain) o_stServoDGainPercentage[jointPath.joint(j)->jointId()].setGoal(arm_gain, 3.0);
+	  if(o_stServoPGainPercentage[jointPath.joint(j)->jointId()].getGoal() != arm_gain) o_stServoPGainPercentage[jointPath.joint(j)->jointId()].setGoal(arm_gain, 0.1);
+	  if(o_stServoDGainPercentage[jointPath.joint(j)->jointId()].getGoal() != arm_gain) o_stServoDGainPercentage[jointPath.joint(j)->jointId()].setGoal(arm_gain, 0.1);
 	}
       }
     }
@@ -684,19 +578,6 @@ bool Stabilizer::calcTorque(double dt, const GaitParam& gaitParam, bool useActSt
       o_stServoDGainPercentage[i].interpolate(dt);
     }
   } // useActState
-
-  for(int i=0;i<gaitParam.genRobot->numJoints();i++){
-    prev_q[i] = gaitParam.genRobot->joint(i)->q();
-    prev_dq[i] = gaitParam.refRobot->joint(i)->dq();
-  }
-
-  for(int i=0;i<gaitParam.eeName.size();i++){
-    eeTargetPosedd[i] = eeTargetPosed[i];
-    eeTargetPosed[i] = gaitParam.abcEETargetPose[i];
-  }
-
-  prev_rootd.head<3>() = gaitParam.refRobot->rootLink()->v();
-  prev_rootd.tail<3>() = gaitParam.refRobot->rootLink()->w();
   
   return true;
 }
