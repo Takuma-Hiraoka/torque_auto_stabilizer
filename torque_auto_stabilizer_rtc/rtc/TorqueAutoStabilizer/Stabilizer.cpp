@@ -5,28 +5,12 @@
 #include <cnoid/src/Body/InverseDynamics.h>
 
 void Stabilizer::initStabilizerOutput(const GaitParam& gaitParam,
-                                      cpp_filters::TwoPointInterpolator<cnoid::Vector3>& o_stOffsetRootRpy, cnoid::Vector3& o_stTargetZmp, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoPGainPercentage, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoDGainPercentage) const{
-
-  o_stOffsetRootRpy.reset(cnoid::Vector3::Zero());
+                                      cnoid::Vector3& o_stTargetZmp, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoPGainPercentage, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoDGainPercentage) const{
   o_stTargetZmp = gaitParam.refZmpTraj[0].getStart();
   for(int i=0;i<o_stServoPGainPercentage.size();i++){
     o_stServoPGainPercentage[i].reset(100.0);
     o_stServoDGainPercentage[i].reset(100.0);
   }
-}
-
-bool Stabilizer::execStabilizer(const GaitParam& gaitParam, double dt, bool useActState,
-                                cpp_filters::TwoPointInterpolator<cnoid::Vector3>& o_stOffsetRootRpy, cnoid::Position& o_stTargetRootPose) const{
-  // - root attitude control
-  // - 現在のactual重心位置から、目標ZMPを計算
-  // - 目標ZMPを満たすように目標足裏反力を計算
-  // - 目標反力を満たすように重力補償+仮想仕事の原理
-
-  // root attitude control
-  this->moveBasePosRotForBodyRPYControl(dt, gaitParam, useActState,// input
-                                        o_stOffsetRootRpy, o_stTargetRootPose); // output
-
-  return true;
 }
 
 bool Stabilizer::calcResolvedAccelationControl(const GaitParam& gaitParam, double dt, bool useActState, cnoid::BodyPtr& actRobotTqc, 
@@ -57,34 +41,6 @@ bool Stabilizer::calcResolvedAccelationControl(const GaitParam& gaitParam, doubl
 
   return true;
 };
-
-bool Stabilizer::moveBasePosRotForBodyRPYControl(double dt, const GaitParam& gaitParam, bool useActState,
-                                                 cpp_filters::TwoPointInterpolator<cnoid::Vector3>& o_stOffsetRootRpy, cnoid::Position& o_stTargetRootPose) const{
-
-  // stOffsetRootRpyを計算
-  if(!useActState){
-      o_stOffsetRootRpy.interpolate(dt);
-  }else{
-    cnoid::Vector3 stOffsetRootRpy = o_stOffsetRootRpy.value(); // gaitParam.footMidCoords frame
-
-    cnoid::Matrix3 rootRErrorGenerateFrame = gaitParam.refRobot->rootLink()->R() * gaitParam.actRobot->rootLink()->R().transpose(); // generate frame
-    cnoid::Matrix3 rootRError = gaitParam.footMidCoords.value().linear().transpose() * rootRErrorGenerateFrame/*generate frame*/ * gaitParam.footMidCoords.value().linear(); // gaitParam.footMidCoords frame
-    cnoid::Vector3 rootRpyError = cnoid::rpyFromRot(rootRError); // gaitParam.footMidCoords frame
-
-    for (size_t i = 0; i < 2; i++) {
-      stOffsetRootRpy[i] += (this->bodyAttitudeControlGain[i] * rootRpyError[i] - 1.0/this->bodyAttitudeControlTimeConst[i] * stOffsetRootRpy[i]) * dt;
-      stOffsetRootRpy[i] = mathutil::clamp(stOffsetRootRpy[i], this->bodyAttitudeControlCompensationLimit[i]);
-    }
-    stOffsetRootRpy[2] = 0.0;
-
-    o_stOffsetRootRpy.reset(stOffsetRootRpy);
-  }
-
-  // stTargetRootPoseを計算
-  o_stTargetRootPose.translation() = gaitParam.refRobot->rootLink()->p();
-  o_stTargetRootPose.linear() /*generate frame*/= gaitParam.footMidCoords.value().linear() * cnoid::rotFromRpy(o_stOffsetRootRpy.value()/*gaitParam.footMidCoords frame*/) * gaitParam.footMidCoords.value().linear().transpose() * gaitParam.refRobot->rootLink()->R()/*generate frame*/;
-  return true;
-}
 
 bool Stabilizer::calcZMP(const GaitParam& gaitParam, double dt, bool useActState,
                          cnoid::Vector3& o_tgtZmp, cnoid::Vector3& o_tgtForce, cnoid::Vector3& o_tgtCogAcc) const{

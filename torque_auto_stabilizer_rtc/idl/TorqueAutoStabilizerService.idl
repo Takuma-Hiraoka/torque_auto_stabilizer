@@ -245,12 +245,6 @@ module OpenHRP
       double footguided_balance_time;
 
       // Stabilizer
-      /// Body attitude control gain [rad/s] (roll, pitch). 下限0.0
-      sequence<double, 2> eefm_body_attitude_control_gain;
-      /// Time constant for body attitude control [s] (roll, pitch).o 下限0.01
-      sequence<double, 2> eefm_body_attitude_control_time_const;
-      /// Limit of compensation for difference between ref-act root rot [rad]. stabilierが動いているときは変更不可. 下限0.0
-      sequence<double, 2> eefm_body_attitude_control_compensation_limit;
       /// 下限0.01[s]
       double swing2landing_transition_time;
       /// 下限0.01[s]

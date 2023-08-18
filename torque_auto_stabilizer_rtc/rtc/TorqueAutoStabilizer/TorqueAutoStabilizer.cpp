@@ -570,7 +570,7 @@ bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::Contro
     legCoordsGenerator.initLegCoords(gaitParam,
                                      gaitParam.refZmpTraj, gaitParam.genCoords);
     stabilizer.initStabilizerOutput(gaitParam,
-                                    gaitParam.stOffsetRootRpy, gaitParam.stTargetZmp, gaitParam.stServoPGainPercentage, gaitParam.stServoDGainPercentage);
+                                    gaitParam.stTargetZmp, gaitParam.stServoPGainPercentage, gaitParam.stServoDGainPercentage);
   }
 
   // FootOrigin座標系を用いてrefRobotRawをgenerate frameに投影しrefRobotとする
@@ -612,14 +612,11 @@ bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::Contro
 
   // Stabilizer
   if(mode.isSyncToStopSTInit()){ // stopST直後の初回
-    gaitParam.stOffsetRootRpy.setGoal(cnoid::Vector3::Zero(),mode.remainTime());
     for(int i=0;i<gaitParam.genRobot->numJoints();i++){
       if(gaitParam.stServoPGainPercentage[i].getGoal() != 100.0) gaitParam.stServoPGainPercentage[i].setGoal(100.0, mode.remainTime());
       if(gaitParam.stServoDGainPercentage[i].getGoal() != 100.0) gaitParam.stServoDGainPercentage[i].setGoal(100.0, mode.remainTime());
     }
   }
-  stabilizer.execStabilizer(gaitParam, dt, mode.isSTRunning(),
-                            gaitParam.stOffsetRootRpy, gaitParam.stTargetRootPose);
 
   // FullbodyIKSolver
   if(!mode.isSTRunning()) {
@@ -1451,16 +1448,6 @@ bool TorqueAutoStabilizer::setTorqueAutoStabilizerParam(const OpenHRP::TorqueAut
   this->legCoordsGenerator_.previewStepNum = std::max(i_param.preview_step_num, 2);
   this->legCoordsGenerator_.footGuidedBalanceTime = std::max(i_param.footguided_balance_time, 0.01);
 
-  if(i_param.eefm_body_attitude_control_gain.length() == 2 &&
-     i_param.eefm_body_attitude_control_time_const.length() == 2 &&
-     i_param.eefm_body_attitude_control_compensation_limit.length() == 2){
-    for(int i=0;i<2;i++) {
-      this->stabilizer_.bodyAttitudeControlGain[i] = std::max(i_param.eefm_body_attitude_control_gain[i], 0.0);
-      this->stabilizer_.bodyAttitudeControlTimeConst[i] = std::max(i_param.eefm_body_attitude_control_time_const[i], 0.01);
-      if(!this->mode_.isSTRunning()) this->stabilizer_.bodyAttitudeControlCompensationLimit[i] = std::max(i_param.eefm_body_attitude_control_compensation_limit[i], 0.0);
-    }
-  }
-
   this->stabilizer_.swing2LandingTransitionTime = std::max(i_param.swing2landing_transition_time, 0.01);
   this->stabilizer_.landing2SupportTransitionTime = std::max(i_param.landing2support_transition_time, 0.01);
   this->stabilizer_.support2SwingTransitionTime = std::max(i_param.support2swing_transition_time, 0.01);
@@ -1657,14 +1644,6 @@ bool TorqueAutoStabilizer::getTorqueAutoStabilizerParam(OpenHRP::TorqueAutoStabi
   i_param.preview_step_num = this->legCoordsGenerator_.previewStepNum;
   i_param.footguided_balance_time = this->legCoordsGenerator_.footGuidedBalanceTime;
 
-  i_param.eefm_body_attitude_control_gain.length(2);
-  i_param.eefm_body_attitude_control_time_const.length(2);
-  i_param.eefm_body_attitude_control_compensation_limit.length(2);
-  for(int i=0;i<2;i++) {
-    i_param.eefm_body_attitude_control_gain[i] = this->stabilizer_.bodyAttitudeControlGain[i];
-    i_param.eefm_body_attitude_control_time_const[i] = this->stabilizer_.bodyAttitudeControlTimeConst[i];
-    i_param.eefm_body_attitude_control_compensation_limit[i] = this->stabilizer_.bodyAttitudeControlCompensationLimit[i];
-  }
   i_param.swing2landing_transition_time = this->stabilizer_.swing2LandingTransitionTime;
   i_param.landing2support_transition_time = this->stabilizer_.landing2SupportTransitionTime;
   i_param.support2swing_transition_time = this->stabilizer_.support2SwingTransitionTime;
