@@ -14,10 +14,13 @@ public:
   double footGuidedBalanceTime = 0.6; // [s]. refZmpTrajの終端時間. 0より大きい. (1.0[s]だと大きすぎて, 両足で立っているときに傾いたままなかなか戻ってこなかったり、停止時に重心がなかなか中央に戻らずemergency stepが無限誘発したり、少しずつ傾いていくことがある). (0.4だと静止時に衝撃が加わると上下方向に左右交互に振動することがある)
 public:
   void initLegCoords(const GaitParam& gaitParam,
-                     std::vector<footguidedcontroller::LinearTrajectory<cnoid::Vector3> >& o_refZmpTraj, std::vector<mathutil::TwoPointInterpolatorSE3>& o_genCoords) const;
+                     std::vector<footguidedcontroller::LinearTrajectory<cnoid::Vector3> >& o_refZmpTraj, std::vector<cpp_filters::TwoPointInterpolatorSE3>& o_genCoords) const;
 
   void calcLegCoords(const GaitParam& gaitParam, double dt, bool useActStates,
-                     std::vector<footguidedcontroller::LinearTrajectory<cnoid::Vector3> >& o_refZmpTraj, std::vector<mathutil::TwoPointInterpolatorSE3>& o_genCoords, std::vector<GaitParam::SwingState_enum>& o_swingState) const;
+                     std::vector<footguidedcontroller::LinearTrajectory<cnoid::Vector3> >& o_refZmpTraj, std::vector<cpp_filters::TwoPointInterpolatorSE3>& o_genCoords, std::vector<GaitParam::SwingState_enum>& o_swingState) const;
+
+  void calcCOMCoords(const GaitParam& gaitParam, double dt,
+                     cnoid::Vector3& o_genNextCog, cnoid::Vector3& o_genNextCogVel, cnoid::Vector3& o_genNextCogAcc) const;
 
 };
 

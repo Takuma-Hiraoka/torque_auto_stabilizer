@@ -1,11 +1,39 @@
 #ifndef TorqueAutoStabilizer_idl
 #define TorqueAutoStabilizer_idl
 
+#include "ExtendedDataTypes.idl"
+
 module torque_auto_stabilizer_msgs
 {
-  struct TemplateDataIdl
+  const long RLEG = 0;
+  const long LLEG = 1;
+
+  struct LandingPositionIdl
   {
-    double data;
+    double x;
+    double y;
+    double z;
+    double nx;
+    double ny;
+    double nz;
+    long l_r; // 0: right. 1: left. 現在支持脚
+  };
+
+  struct SteppableRegionIdl
+  {
+    sequence<sequence<double> > region;
+    long l_r; // 0: right. 1: left. 現在支持脚
+  };
+
+  struct TimedLandingPosition
+  {
+    RTC::Time tm;
+    LandingPositionIdl data;
+  };
+  struct TimedSteppableRegion
+  {
+    RTC::Time tm;
+    SteppableRegionIdl data;
   };
 };
 

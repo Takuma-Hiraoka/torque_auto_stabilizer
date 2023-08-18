@@ -1,4 +1,15 @@
+// -*- C++ -*-
+/*!
+ * @file WholeBodyMasterSlaveComp.cpp
+ * @brief Standalone component
+ * @date $Date$
+ *
+ * $Id$
+ */
+
 #include <rtm/Manager.h>
+#include <iostream>
+#include <string>
 #include "TorqueAutoStabilizer.h"
 
 void MyModuleInit(RTC::Manager* manager)
@@ -7,10 +18,9 @@ void MyModuleInit(RTC::Manager* manager)
   RTC::RtcBase* comp;
 
   // Create a component
-  comp = manager->createComponent("TorqueAutoStabilizer"); // skip root name space for OpenRTM instance name
+  comp = manager->createComponent("TorqueAutoStabilizer");
 
   return;
-
 }
 
 int main (int argc, char** argv)

@@ -3,6 +3,7 @@
 #ifndef FOOTGILDEDCONTROLLER_H_
 #define FOOTGILDEDCONTROLLER_H_
 #include <iostream>
+#include <Eigen/Eigen>
 
 namespace footguidedcontroller{
   template <typename T>

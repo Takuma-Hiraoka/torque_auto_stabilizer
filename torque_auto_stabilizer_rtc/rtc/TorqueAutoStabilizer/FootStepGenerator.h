@@ -42,7 +42,7 @@ public:
   bool isGoVelocityMode = false; // 進行方向に向けてfootStepNodesList[1] ~ footStepNodesList[goVelocityStepNum]の要素をfootstepNodesList[0]から機械的に計算してどんどん位置修正&末尾appendしていく.
 
 protected:
-  mutable std::vector<mathutil::FirstOrderLowPassFilter<cnoid::Vector6> > actLegWrenchFilter = std::vector<mathutil::FirstOrderLowPassFilter<cnoid::Vector6> >(2, mathutil::FirstOrderLowPassFilter<cnoid::Vector6>(50.0, cnoid::Vector6::Zero()));  // 要素数2. rleg: 0. lleg: 1. generate frame. endeffector origin. cutoff 50hz. contactDecisionThresholdを用いた接触判定に用いる
+  mutable std::vector<cpp_filters::FirstOrderLowPassFilter<cnoid::Vector6> > actLegWrenchFilter = std::vector<cpp_filters::FirstOrderLowPassFilter<cnoid::Vector6> >(2, cpp_filters::FirstOrderLowPassFilter<cnoid::Vector6>(50.0, cnoid::Vector6::Zero()));  // 要素数2. rleg: 0. lleg: 1. generate frame. endeffector origin. cutoff 50hz. contactDecisionThresholdを用いた接触判定に用いる
 public:
   // startAutoBalancer時に呼ばれる
   void reset(){
@@ -108,7 +108,7 @@ public:
 
   // FootStepNodesListをdtすすめる
   bool procFootStepNodesList(const GaitParam& gaitParam, const double& dt, bool useActState,
-                             std::vector<GaitParam::FootStepNodes>& o_footstepNodesList, std::vector<cnoid::Position>& o_srcCoords, std::vector<cnoid::Position>& o_dstCoordsOrg, double& o_remainTimeOrg, std::vector<GaitParam::SwingState_enum>& o_swingState, double& o_elapsedTime, std::vector<bool>& o_prevSupportPhase, double& relLandingHeight) const;
+                             std::vector<GaitParam::FootStepNodes>& o_footstepNodesList, std::vector<cnoid::Position>& o_srcCoords, std::vector<cnoid::Position>& o_dstCoordsOrg, double& o_remainTimeOrg, std::vector<GaitParam::SwingState_enum>& o_swingState, double& o_elapsedTime, std::vector<bool>& o_prevSupportPhase, double& relLandingHeight, cnoid::Vector3& doubleSupportZmpOffset) const;
 
   /*
     footstepNodesList[1]開始時のsupport/swingの状態を上書きによって変更する場合は、footstepNodesList[0]の終了時の状態が両脚支持でかつその期間の時間がdefaultDoubleSupportTimeよりも短いなら延長する
@@ -126,7 +126,7 @@ public:
 
 protected:
   // 早づきしたらremainTimeをdtに減らしてすぐに次のnodeへ移る. この機能が無いと少しでもロボットが傾いて早づきするとジャンプするような挙動になる.
-  void checkEarlyTouchDown(std::vector<GaitParam::FootStepNodes>& footstepNodesList, const GaitParam& gaitParam, double dt) const;
+  void checkEarlyTouchDown(std::vector<GaitParam::FootStepNodes>& footstepNodesList, cnoid::Vector3& doubleSupportZmpOffset, const GaitParam& gaitParam, double dt) const;
   // stableGoStop.
   void checkStableGoStop(std::vector<GaitParam::FootStepNodes>& footstepNodesList, const GaitParam& gaitParam) const;
   // footstepNodesListをdtだけ進める
@@ -140,7 +140,7 @@ protected:
                        const GaitParam& gaitParam) const;
 
   // thetaとlegHullとstrideLimitationHullから、実際のstrideLimitationhullを求める. 支持脚(水平)座標系. strideLimitationHullの要素数が1以上なら、返り値も必ず1以上
-  std::vector<cnoid::Vector3> calcRealStrideLimitationHull(const int& swingLeg, const double& theta, const std::vector<std::vector<cnoid::Vector3> >& legHull, const std::vector<mathutil::TwoPointInterpolator<cnoid::Vector3> >& defaultTranslatePos, const std::vector<std::vector<cnoid::Vector3> >& strideLimitationHull) const;
+  std::vector<cnoid::Vector3> calcRealStrideLimitationHull(const int& swingLeg, const double& theta, const std::vector<std::vector<cnoid::Vector3> >& legHull, const std::vector<cpp_filters::TwoPointInterpolator<cnoid::Vector3> >& defaultTranslatePos, const std::vector<std::vector<cnoid::Vector3> >& strideLimitationHull) const;
   // footstepNodesList[idx:] idxより先のstepの位置をgenerate frameで(左から)transformだけ動かす
   void transformFutureSteps(std::vector<GaitParam::FootStepNodes>& footstepNodesList, int index, const cnoid::Position& transform/*generate frame*/) const;
   // footstepNodesList[idx:] idxより先のstepの位置をgenerate frameでtransformだけ動かす
