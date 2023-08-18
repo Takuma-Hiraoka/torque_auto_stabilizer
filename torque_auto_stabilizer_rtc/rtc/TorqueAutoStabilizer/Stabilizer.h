@@ -38,10 +38,6 @@ public:
   cnoid::VectorXd joint_D; // 0以上
   std::vector<cpp_filters::TwoPointInterpolator<double> > aikdqWeight; // 要素数と順序はrobot->numJoints()と同じ. 0より大きい. 各関節の速度に対するダンピング項の比. default 1. 動かしたくない関節は大きくする. 全く動かしたくないなら、controllable_jointsを使うこと. resolved acceleration control用
 
-  double ee_dv_limit = 20.0; // 分解加速度制御でのタスク空間でのフィードバック込みの加速度ノルム上限
-  double ee_dw_limit = 20.0; // 分解加速度制御でのタスク空間でのフィードバック込みの角加速度ノルム上限
-  double defaultDdqLimit = 50; // qpにいれる全関節共通のデフォルト関節角加速度リミット. 特にrootについてはこれを使う
-  std::vector<double> ddq_limit; // qpに入れる関節角加速度リミット. 電流リミット*トルク定数*ギア比= トルクリミットを関節イナーシャで割った値. 要素数はnumJointsなのでrootを含まない. 大きすぎて(低くて400m/s^2)実際は機能していない
   std::vector<double> torque_limit; // u に入れる関節トルクリミット. 電流リミット*トルク定数*ギア比
   std::vector<double> torque_ratcheting_limit = {220, 450, 1000, 1000, 220, 220, // 右足
                                                  220, 450, 1000, 1000, 220, 220, // 左足
@@ -92,7 +88,6 @@ public:
     aikJointLimitConstraint.clear();
     for(int i=0;i<actRobotTqc->numJoints();i++) aikJointLimitConstraint.push_back(std::make_shared<aik_constraint_joint_limit_table::JointLimitMinMaxTableConstraint>());
     
-    this->ddq_limit.resize(gaitParam.actRobotTqc->numJoints());
     this->torque_limit.resize(gaitParam.actRobotTqc->numJoints());
     for (int i=0;i<gaitParam.actRobotTqc->numJoints();i++){
       double climit = gaitParam.actRobotTqc->joint(i)->info<double>("climit");
@@ -102,7 +97,7 @@ public:
       cnoid::Matrix3 Inertia = gaitParam.actRobotTqc->joint(i)->I();
       cnoid::Vector3 axis = gaitParam.actRobotTqc->joint(i)->jointAxis();
       this->torque_limit[i] = std::max(climit * gearRatio * torqueConst, this->torque_ratcheting_limit[i]);
-      this->ddq_limit[i] = climit * gearRatio * torqueConst / (Inertia * axis).norm();
+      //this->ddq_limit[i] = climit * gearRatio * torqueConst / (Inertia * axis).norm();
     }
 
     this->joint_K = cnoid::VectorXd::Zero(gaitParam.actRobotTqc->numJoints());
