@@ -1448,6 +1448,56 @@ bool TorqueAutoStabilizer::setTorqueAutoStabilizerParam(const OpenHRP::TorqueAut
   this->legCoordsGenerator_.previewStepNum = std::max(i_param.preview_step_num, 2);
   this->legCoordsGenerator_.footGuidedBalanceTime = std::max(i_param.footguided_balance_time, 0.01);
 
+  if(i_param.ee_p.length() == this->gaitParam_.eeName.size() &&
+     i_param.ee_d.length() == this->gaitParam_.eeName.size()){
+    for(int i=0;i<this->gaitParam_.eeName.size();i++){
+      if(i_param.ee_p[i].length() == this->stabilizer_.ee_K[i].size() &&
+         i_param.ee_d[i].length() == this->stabilizer_.ee_D[i].size()){
+        for(int j=0;j<this->stabilizer_.ee_K[i].size();j++){
+          this->stabilizer_.ee_K[i][j] = std::max(i_param.ee_p[i][j], 0.0);
+          this->stabilizer_.ee_D[i][j] = std::max(i_param.ee_d[i][j], 0.0);
+        }
+      }
+    }
+  }
+  if(i_param.ee_support_d.length() == NUM_LEGS &&
+     i_param.ee_landing_p.length() == NUM_LEGS &&
+     i_param.ee_landing_d.length() == NUM_LEGS &&
+     i_param.ee_swing_p.length() == NUM_LEGS &&
+     i_param.ee_swing_d.length() == NUM_LEGS){
+    for(int i=0;i<NUM_LEGS;i++){
+      if(i_param.ee_support_d[i].length() == this->stabilizer_.ee_support_D[i].size() &&
+         i_param.ee_landing_p[i].length() == this->stabilizer_.ee_landing_K[i].size() &&
+         i_param.ee_landing_d[i].length() == this->stabilizer_.ee_landing_D[i].size() &&
+         i_param.ee_swing_p[i].length() == this->stabilizer_.ee_swing_K[i].size() &&
+         i_param.ee_swing_d[i].length() == this->stabilizer_.ee_swing_D[i].size()){
+        for(int j=0;j<this->stabilizer_.ee_support_D[i].size();j++){
+          this->stabilizer_.ee_support_D[i][j] = std::max(i_param.ee_support_d[i][j], 0.0);
+          this->stabilizer_.ee_landing_K[i][j] = std::max(i_param.ee_landing_p[i][j], 0.0);
+          this->stabilizer_.ee_landing_D[i][j] = std::max(i_param.ee_landing_d[i][j], 0.0);
+          this->stabilizer_.ee_swing_K[i][j] = std::max(i_param.ee_swing_p[i][j], 0.0);
+          this->stabilizer_.ee_swing_D[i][j] = std::max(i_param.ee_swing_d[i][j], 0.0);
+        }
+      }
+    }
+  }
+  if(i_param.root_p.length() == 3 &&
+     i_param.root_d.length() == 3){
+    for(int i=0;i<3;i++) {
+      this->stabilizer_.root_K[i] = std::max(i_param.root_p[i], 0.0);
+      this->stabilizer_.root_D[i] = std::max(i_param.root_d[i], 0.0);
+    }
+  }
+  // TODO
+  //  this->stabilizer_.joint_K = std::max(i_param.joint_p, 0.0);
+  //  this->stabilizer_.joint_D = std::max(i_param.joint_d, 0.0);
+  if(i_param.st_dq_weight.length() == this->stabilizer_.aikdqWeight.size()){
+    for(int i=0;i<this->stabilizer_.aikdqWeight.size();i++){
+      double value = std::max(0.01, i_param.st_dq_weight[i]);
+      if(value != this->stabilizer_.aikdqWeight[i].getGoal()) this->stabilizer_.aikdqWeight[i].setGoal(value, 2.0); // 2秒で遷移
+    }
+  }
+  
   this->stabilizer_.swing2LandingTransitionTime = std::max(i_param.swing2landing_transition_time, 0.01);
   this->stabilizer_.landing2SupportTransitionTime = std::max(i_param.landing2support_transition_time, 0.01);
   this->stabilizer_.support2SwingTransitionTime = std::max(i_param.support2swing_transition_time, 0.01);
@@ -1643,6 +1693,47 @@ bool TorqueAutoStabilizer::getTorqueAutoStabilizerParam(OpenHRP::TorqueAutoStabi
   i_param.swing_trajectory_final_distance_weight = this->legCoordsGenerator_.finalDistanceWeight;
   i_param.preview_step_num = this->legCoordsGenerator_.previewStepNum;
   i_param.footguided_balance_time = this->legCoordsGenerator_.footGuidedBalanceTime;
+
+  i_param.ee_p.length(this->gaitParam_.eeName.size());
+  i_param.ee_d.length(this->gaitParam_.eeName.size());
+  for(int i=0;i<this->gaitParam_.eeName.size();i++){
+    i_param.ee_p[i].length(6);
+    i_param.ee_d[i].length(6);
+    for(int j=0;j<6;j++){
+      i_param.ee_p[i][j] = this->stabilizer_.ee_K[i][j];
+      i_param.ee_d[i][j] = this->stabilizer_.ee_D[i][j];
+    }
+  }
+  i_param.ee_support_d.length(NUM_LEGS);
+  i_param.ee_landing_p.length(NUM_LEGS);
+  i_param.ee_landing_d.length(NUM_LEGS);
+  i_param.ee_swing_p.length(NUM_LEGS);
+  i_param.ee_swing_d.length(NUM_LEGS);
+  for(int i=0;i<NUM_LEGS;i++){
+    i_param.ee_support_d[i].length(6);
+    i_param.ee_landing_p[i].length(6);
+    i_param.ee_landing_d[i].length(6);
+    i_param.ee_swing_p[i].length(6);
+    i_param.ee_swing_d[i].length(6);
+    for(int j=0;j<6;j++){
+      i_param.ee_support_d[i][j] = this->stabilizer_.ee_support_D[i][j];
+      i_param.ee_landing_p[i][j] = this->stabilizer_.ee_landing_K[i][j];
+      i_param.ee_landing_d[i][j] = this->stabilizer_.ee_landing_D[i][j];
+      i_param.ee_swing_p[i][j] = this->stabilizer_.ee_swing_K[i][j];
+      i_param.ee_swing_d[i][j] = this->stabilizer_.ee_swing_D[i][j];
+    }
+  }
+  i_param.root_p.length(3);
+  for(int i=0;i<3;i++) i_param.root_p[i] = this->stabilizer_.root_K[i];
+  i_param.root_d.length(3);
+  for(int i=0;i<3;i++) i_param.root_d[i] = this->stabilizer_.root_D[i];
+  // TODO
+  //  i_param.joint_p = this->stabilizer_.joint_K;
+  //  i_param.joint_d = this->stabilizer_.joint_D;
+  i_param.st_dq_weight.length(this->stabilizer_.aikdqWeight.size());
+  for(int i=0;i<this->stabilizer_.aikdqWeight.size();i++){
+    i_param.st_dq_weight[i] = this->stabilizer_.aikdqWeight[i].getGoal();
+  }
 
   i_param.swing2landing_transition_time = this->stabilizer_.swing2LandingTransitionTime;
   i_param.landing2support_transition_time = this->stabilizer_.landing2SupportTransitionTime;

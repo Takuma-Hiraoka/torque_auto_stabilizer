@@ -245,6 +245,31 @@ module OpenHRP
       double footguided_balance_time;
 
       // Stabilizer
+      /// 要素数endeffectors. EndEffector frame. endEffector origin. 0以上
+      sequence<sequence<double, 6> > ee_p;
+      /// 要素数endeffectors. EndEffector frame. endEffector origin. 0以上
+      sequence<sequence<double, 6> > ee_d;
+      /// 要素数2. [rleg, lleg]. EndEffector frame. endEffector origin. 0以上
+      sequence<sequence<double, 6>,2 > ee_support_d;
+      /// 要素数2. [rleg, lleg]. EndEffector frame. endEffector origin. 0以上
+      sequence<sequence<double, 6>, 2> ee_landing_p;
+      /// 要素数2. [rleg, lleg]. EndEffector frame. endEffector origin. 0以上
+      sequence<sequence<double, 6>, 2> ee_landing_d;
+      /// 要素数2. [rleg, lleg]. EndEffector frame. endEffector origin. 0以上
+      sequence<sequence<double, 6>, 2> ee_swing_p;
+      /// 要素数2. [rleg, lleg]. EndEffector frame. endEffector origin. 0以上
+      sequence<sequence<double, 6>, 2> ee_swing_d;
+      /// rootlink frame. 0以上
+      sequence<double, 3> root_p;
+      /// rootlink frame. 0以上
+      sequence<double, 3> root_d;
+      /// 0以上
+      double joint_p;
+      /// 0以上
+      double joint_d;
+      /// 要素数と順序はrobot->numJoints()と同じ. 0より大きい. 各関節の変位に対する重みの比. default 1. 動かしたくない関節は大きくする. 全く動かしたくないなら、controllable_jointsを使うこと
+      sequence<double> st_dq_weight;
+      
       /// 下限0.01[s]
       double swing2landing_transition_time;
       /// 下限0.01[s]
