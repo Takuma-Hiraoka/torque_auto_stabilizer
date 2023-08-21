@@ -270,28 +270,6 @@ bool Stabilizer::calcTorque(double dt, const GaitParam& gaitParam, bool useActSt
       o_stServoDGainPercentage[i].interpolate(dt);
     }
   } else {
-    cnoid::VectorX tau_g = cnoid::VectorXd::Zero(actRobotTqc->numJoints()); // 重力
-    cnoid::VectorX tau_ee = cnoid::VectorXd::Zero(actRobotTqc->numJoints()); // endEffector
-
-    // 速度・加速度を考慮しない重力補償
-    {
-      actRobotTqc->rootLink()->T() = gaitParam.actRobot->rootLink()->T();
-      actRobotTqc->rootLink()->v() = cnoid::Vector3::Zero();
-      actRobotTqc->rootLink()->w() = cnoid::Vector3::Zero();
-      actRobotTqc->rootLink()->dv() = cnoid::Vector3(0.0,0.0,gaitParam.g);
-      actRobotTqc->rootLink()->dw() = cnoid::Vector3::Zero();
-      for(int i=0;i<actRobotTqc->numJoints();i++){
-	actRobotTqc->joint(i)->q() = gaitParam.actRobot->joint(i)->q();
-	actRobotTqc->joint(i)->dq() = 0.0;
-	actRobotTqc->joint(i)->ddq() = 0.0;
-      }
-      actRobotTqc->calcForwardKinematics(true, true);
-      cnoid::calcInverseDynamics(actRobotTqc->rootLink()); // actRobotTqc->joint()->u()に書き込まれる
-      for(int i=0;i<actRobotTqc->numJoints();i++){
-	tau_g[i] = actRobotTqc->joint(i)->u();
-	actRobotTqc->joint(i)->u() = 0.0;
-      }
-    }
 
     // actRobotTqcのq,dqにactualの値を入れる
     {
@@ -451,33 +429,25 @@ bool Stabilizer::calcTorque(double dt, const GaitParam& gaitParam, bool useActSt
                                                                       param);
 	
     if(!solved){
-      std::cerr << "fail" << std::endl; // TODO
-    }else {
-      actRobotTqc->calcForwardKinematics(true, true);
-      actRobotTqc->calcCenterOfMass();
-      cnoid::calcInverseDynamics(actRobotTqc->rootLink()); // actRobotTqc->joint()->u()に書き込まれる
+      std::cerr << "fail" << std::endl;
+      // 重力補償だけする
+      actRobotTqc->rootLink()->T() = gaitParam.actRobot->rootLink()->T();
+      actRobotTqc->rootLink()->v() = cnoid::Vector3::Zero();
+      actRobotTqc->rootLink()->w() = cnoid::Vector3::Zero();
+      actRobotTqc->rootLink()->dv() = cnoid::Vector3(0.0,0.0,gaitParam.g);
+      actRobotTqc->rootLink()->dw() = cnoid::Vector3::Zero();
       for(int i=0;i<actRobotTqc->numJoints();i++){
-	tau_ee[i] = actRobotTqc->joint(i)->u();
-	actRobotTqc->joint(i)->u() = 0.0;
+	actRobotTqc->joint(i)->q() = gaitParam.actRobot->joint(i)->q();
+	actRobotTqc->joint(i)->dq() = 0.0;
+	actRobotTqc->joint(i)->ddq() = 0.0;
       }
+    }else {
+      actRobotTqc->rootLink()->dv() += cnoid::Vector3(0.0,0.0,gaitParam.g);
     }
 
-    // 最終的な出力トルクを代入
-    for(int i=0;i<actRobotTqc->numJoints();i++){
-      actRobotTqc->joint(i)->u() = tau_g[i] +  tau_ee[i];
-    }
-    
-    // std::cerr << "tau_g" << std::endl; 
-    // for(int i=0;i<actRobotTqc->numJoints();i++){
-    //   std::cerr << tau_g[i] << " ";
-    // }
-    // std::cerr << std::endl;
-
-    // std::cerr << "tau_ee" << std::endl; 
-    // for(int i=0;i<actRobotTqc->numJoints();i++){
-    //   std::cerr << tau_ee[i] << " ";
-    // }
-    // std::cerr << std::endl;
+    actRobotTqc->calcForwardKinematics(true, true);
+    actRobotTqc->calcCenterOfMass();
+    cnoid::calcInverseDynamics(actRobotTqc->rootLink()); // actRobotTqc->joint()->u()に書き込まれる
 
     // std::cerr << "tau" << std::endl; 
     // for(int i=0;i<actRobotTqc->numJoints();i++){
