@@ -42,7 +42,6 @@ add_library(TorqueAutoStabilizer SHARED
   ActToGenFrameConverter.cpp
   ExternalForceHandler.cpp
   Stabilizer.cpp
-  ImpedanceController.cpp
   FullbodyIKSolver.cpp
   LegManualController.cpp
   CmdVelGenerator.cpp

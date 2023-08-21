@@ -35,7 +35,6 @@
 #include "LegManualController.h"
 #include "FootStepGenerator.h"
 #include "LegCoordsGenerator.h"
-#include "ImpedanceController.h"
 #include "Stabilizer.h"
 #include "ExternalForceHandler.h"
 #include "FullbodyIKSolver.h"
@@ -65,8 +64,6 @@ public:
   bool releaseEmergencyStop();
   bool startStabilizer(void);
   bool stopStabilizer(void);
-  bool startImpedanceController(const std::string& i_name);
-  bool stopImpedanceController(const std::string& i_name);
   bool startWholeBodyMasterSlave();
   bool stopWholeBodyMasterSlave();
 
@@ -260,7 +257,6 @@ protected:
   RefToGenFrameConverter refToGenFrameConverter_;
   ActToGenFrameConverter actToGenFrameConverter_;
   ExternalForceHandler externalForceHandler_;
-  ImpedanceController impedanceController_;
   LegManualController legManualController_;
   CmdVelGenerator cmdVelGenerator_;
   FootStepGenerator footStepGenerator_;
@@ -274,7 +270,7 @@ protected:
   static void copyEigenCoords2FootStep(const cnoid::Position& in_fs, OpenHRP::TorqueAutoStabilizerService::Footstep& out_fs);
 
   static bool readInPortData(const double& dt, const GaitParam& gaitParam, const TorqueAutoStabilizer::ControlMode& mode, TorqueAutoStabilizer::Ports& ports, cnoid::BodyPtr refRobotRaw, cnoid::BodyPtr actRobotRaw, std::vector<cnoid::Vector6>& refEEWrenchOrigin, std::vector<cpp_filters::TwoPointInterpolatorSE3>& refEEPoseRaw, std::vector<GaitParam::Collision>& selfCollision, std::vector<std::vector<cnoid::Vector3> >& steppableRegion, std::vector<double>& steppableHeight, double& relLandingHeight, cnoid::Vector3& relLandingNormal);
-  static bool execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const FootStepGenerator& footStepGenerator, const LegCoordsGenerator& legCoordsGenerator, const RefToGenFrameConverter& refToGenFrameConverter, const ActToGenFrameConverter& actToGenFrameConverter, const ImpedanceController& impedanceController, const Stabilizer& stabilizer, const ExternalForceHandler& externalForceHandler, const FullbodyIKSolver& fullbodyIKSolver, const LegManualController& legManualController, const CmdVelGenerator& cmdVelGenerator);
+  static bool execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const FootStepGenerator& footStepGenerator, const LegCoordsGenerator& legCoordsGenerator, const RefToGenFrameConverter& refToGenFrameConverter, const ActToGenFrameConverter& actToGenFrameConverter, const Stabilizer& stabilizer, const ExternalForceHandler& externalForceHandler, const FullbodyIKSolver& fullbodyIKSolver, const LegManualController& legManualController, const CmdVelGenerator& cmdVelGenerator);
   static bool writeOutPortData(TorqueAutoStabilizer::Ports& ports, const TorqueAutoStabilizer::ControlMode& mode, cpp_filters::TwoPointInterpolator<double>& idleToAbcTransitionInterpolator, double dt, const GaitParam& gaitParam);
 };
 

@@ -142,28 +142,6 @@ module OpenHRP
       /// 単位[m]. 長期的外乱補償の上限. 下限0[m]
       double disturbance_compensation_limit;
 
-      // ImpedanceController
-      /// 要素数EndEffectors. EndEffector frame(icTargetPose). endEffector origin.
-      sequence<sequence<double, 3> > impedance_M_p;
-      /// 要素数EndEffectors. EndEffector frame(icTargetPose). endEffector origin.
-      sequence<sequence<double, 3> > impedance_D_p;
-      /// 要素数EndEffectors. EndEffector frame(icTargetPose). endEffector origin.
-      sequence<sequence<double, 3> > impedance_K_p;
-      /// 要素数EndEffectors. EndEffector frame(icTargetPose). endEffector origin.
-      sequence<sequence<double, 3> > impedance_M_r;
-      /// 要素数EndEffectors. EndEffector frame(icTargetPose). endEffector origin.
-      sequence<sequence<double, 3> > impedance_D_r;
-      /// 要素数EndEffectors. EndEffector frame(icTargetPose). endEffector origin.
-      sequence<sequence<double, 3> > impedance_K_r;
-      /// 要素数EndEffectors. EndEffector frame(icTargetPose). endEffector origin.
-      sequence<sequence<double, 3> > impedance_force_gain;
-      /// 要素数EndEffectors. EndEffector frame(icTargetPose). endEffector origin.
-      sequence<sequence<double, 3> > impedance_moment_gain;
-      /// 要素数EndEffectors. EndEffector frame(icTargetPose). endEffector origin. StopImpedanceControllerのとき以外変更不可
-      sequence<sequence<double, 3> > impedance_pos_compensation_limit;
-      /// 要素数EndEffectors. EndEffector frame(icTargetPose). endEffector origin. StopImpedanceControllerのとき以外変更不可
-      sequence<sequence<double, 3> > impedance_rot_compensation_limit;
-
       // CmdVelGenerator
       /// ImpedanceControllerの変位の方向に歩くかどうか
       boolean graspless_manip_mode;
@@ -358,14 +336,14 @@ module OpenHRP
      * @param name: name of end_effector
      * @return true if set successfully, false otherwise
      */
-    boolean startImpedanceController(in string name);
+    boolean startImpedanceController(in string name); // only for rtm-ros-robot-interface.l
 
     /**
      * @brief stop impedance controller.
      * @param name: name of end_effector
      * @return true if set successfully, false otherwise
      */
-    boolean stopImpedanceController(in string name);
+    boolean stopImpedanceController(in string name); // only for rtm-ros-robot-interface.l
 
     /**
      * @brief start WholeBodyMasterSlave.

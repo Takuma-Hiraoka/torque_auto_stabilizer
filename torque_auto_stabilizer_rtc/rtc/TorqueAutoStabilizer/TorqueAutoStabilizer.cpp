@@ -317,9 +317,6 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onInitialize(){
     }
   }
 
-  // init ImpedanceController
-  for(int i=0;i<this->gaitParam_.eeName.size();i++) this->impedanceController_.push_backEE();
-
   // init Stabilizer
   this->stabilizer_.init(this->gaitParam_, this->gaitParam_.actRobotTqc);
 
@@ -557,14 +554,12 @@ bool TorqueAutoStabilizer::readInPortData(const double& dt, const GaitParam& gai
 }
 
 // static function
-bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const FootStepGenerator& footStepGenerator, const LegCoordsGenerator& legCoordsGenerator, const RefToGenFrameConverter& refToGenFrameConverter, const ActToGenFrameConverter& actToGenFrameConverter, const ImpedanceController& impedanceController, const Stabilizer& stabilizer, const ExternalForceHandler& externalForceHandler, const FullbodyIKSolver& fullbodyIKSolver,const LegManualController& legManualController, const CmdVelGenerator& cmdVelGenerator) {
+bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::ControlMode& mode, GaitParam& gaitParam, double dt, const FootStepGenerator& footStepGenerator, const LegCoordsGenerator& legCoordsGenerator, const RefToGenFrameConverter& refToGenFrameConverter, const ActToGenFrameConverter& actToGenFrameConverter, const Stabilizer& stabilizer, const ExternalForceHandler& externalForceHandler, const FullbodyIKSolver& fullbodyIKSolver,const LegManualController& legManualController, const CmdVelGenerator& cmdVelGenerator) {
   if(mode.isSyncToABCInit()){ // startAutoBalancer直後の初回. gaitParamのリセット
     refToGenFrameConverter.initGenRobot(gaitParam,
                                         gaitParam.genRobot, gaitParam.footMidCoords, gaitParam.genCogVel, gaitParam.genCogAcc);
     externalForceHandler.initExternalForceHandlerOutput(gaitParam,
                                                         gaitParam.omega, gaitParam.l, gaitParam.sbpOffset, gaitParam.genCog);
-    impedanceController.initImpedanceOutput(gaitParam,
-                                            gaitParam.icEEOffset);
     footStepGenerator.initFootStepNodesList(gaitParam,
                                             gaitParam.footstepNodesList, gaitParam.srcCoords, gaitParam.dstCoordsOrg, gaitParam.remainTimeOrg, gaitParam.swingState, gaitParam.elapsedTime, gaitParam.prevSupportPhase);
     legCoordsGenerator.initLegCoords(gaitParam,
@@ -584,10 +579,6 @@ bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::Contro
   // 目標外力に応じてオフセットを計算する
   externalForceHandler.handleExternalForce(gaitParam, mode.isSTRunning(), dt,
                                            gaitParam.omega, gaitParam.l, gaitParam.sbpOffset, gaitParam.actCog);
-
-  // Impedance Controller
-  impedanceController.calcImpedanceControl(dt, gaitParam,
-                                           gaitParam.icEEOffset, gaitParam.icEETargetPose);
 
   // Manual Control Modeの足の現在位置をreferenceで上書きする
   legManualController.legManualControl(gaitParam, dt,
@@ -893,8 +884,8 @@ bool TorqueAutoStabilizer::writeOutPortData(TorqueAutoStabilizer::Ports& ports, 
     for (int i=0; i<3; i++) {
       ports.m_genCoords_.data[0+i] = gaitParam.genCoords[RLEG].value().translation()[i];
       ports.m_genCoords_.data[3+i] = gaitParam.genCoords[LLEG].value().translation()[i];
-      ports.m_genCoords_.data[6+i] = gaitParam.icEETargetPose[2].translation()[i];
-      ports.m_genCoords_.data[9+i] = gaitParam.icEETargetPose[3].translation()[i];
+      ports.m_genCoords_.data[6+i] = gaitParam.refEEPose[2].translation()[i];
+      ports.m_genCoords_.data[9+i] = gaitParam.refEEPose[3].translation()[i];
     }
     ports.m_genCoordsOut_.write();
     {
@@ -974,9 +965,8 @@ RTC::ReturnCode_t TorqueAutoStabilizer::onExecute(RTC::UniqueId ec_id){
       this->actToGenFrameConverter_.reset();
       this->externalForceHandler_.reset();
       this->footStepGenerator_.reset();
-      this->impedanceController_.reset();
     }
-    TorqueAutoStabilizer::execAutoStabilizer(this->mode_, this->gaitParam_, this->dt_, this->footStepGenerator_, this->legCoordsGenerator_, this->refToGenFrameConverter_, this->actToGenFrameConverter_, this->impedanceController_, this->stabilizer_,this->externalForceHandler_, this->fullbodyIKSolver_, this->legManualController_, this->cmdVelGenerator_);
+    TorqueAutoStabilizer::execAutoStabilizer(this->mode_, this->gaitParam_, this->dt_, this->footStepGenerator_, this->legCoordsGenerator_, this->refToGenFrameConverter_, this->actToGenFrameConverter_, this->stabilizer_,this->externalForceHandler_, this->fullbodyIKSolver_, this->legManualController_, this->cmdVelGenerator_);
   }
 
   TorqueAutoStabilizer::writeOutPortData(this->ports_, this->mode_, this->idleToAbcTransitionInterpolator_, this->dt_, this->gaitParam_);
@@ -1151,49 +1141,6 @@ bool TorqueAutoStabilizer::stopStabilizer(void){
   }*/
   return false;
 }
-
-bool TorqueAutoStabilizer::startImpedanceController(const std::string& i_name){
-  std::lock_guard<std::mutex> guard(this->mutex_);
-  if(this->mode_.isABCRunning()){
-    for(int i=0;i<this->gaitParam_.eeName.size();i++){
-      if(this->gaitParam_.eeName[i] != i_name) continue;
-      if(this->impedanceController_.isImpedanceMode[i]) {
-        std::cerr << "[" << this->m_profile.instance_name << "] Impedance control [" << i_name << "] is already started" << std::endl;
-        return false;
-      }
-      std::cerr << "[" << this->m_profile.instance_name << "] Start impedance control [" << i_name << "]" << std::endl;
-      this->impedanceController_.isImpedanceMode[i] = true;
-      return true;
-    }
-    std::cerr << "[" << this->m_profile.instance_name << "] Could not found impedance controller param [" << i_name << "]" << std::endl;
-    return false;
-  }else{
-    std::cerr << "[" << this->m_profile.instance_name << "] Please start AutoBalancer" << std::endl;
-    return false;
-  }
-}
-
-bool TorqueAutoStabilizer::stopImpedanceController(const std::string& i_name){
-  std::lock_guard<std::mutex> guard(this->mutex_);
-  if(this->mode_.isABCRunning()){
-    for(int i=0;i<this->gaitParam_.eeName.size();i++){
-      if(this->gaitParam_.eeName[i] != i_name) continue;
-      if(!this->impedanceController_.isImpedanceMode[i]) {
-        std::cerr << "[" << this->m_profile.instance_name << "] Impedance control [" << i_name << "] is already stopped" << std::endl;
-        return false;
-      }
-      std::cerr << "[" << this->m_profile.instance_name << "] Stop impedance control [" << i_name << "]" << std::endl;
-      this->impedanceController_.isImpedanceMode[i] = false;
-      this->gaitParam_.icEEOffset[i].setGoal(cnoid::Vector6::Zero(), 2.0);
-      return true;
-    }
-    std::cerr << "[" << this->m_profile.instance_name << "] Could not found impedance controller param [" << i_name << "]" << std::endl;
-    return false;
-  }else{
-    std::cerr << "[" << this->m_profile.instance_name << "] Please start AutoBalancer" << std::endl;
-    return false;
-  }
-}
 bool TorqueAutoStabilizer::startWholeBodyMasterSlave(void){
   std::lock_guard<std::mutex> guard(this->mutex_);
   if(this->mode_.isABCRunning()){
@@ -1314,45 +1261,6 @@ bool TorqueAutoStabilizer::setTorqueAutoStabilizerParam(const OpenHRP::TorqueAut
   this->externalForceHandler_.disturbanceCompensationTimeConst = std::max(i_param.disturbance_compensation_time_const, 0.01);
   this->externalForceHandler_.disturbanceCompensationStepNum = std::max(i_param.disturbance_compensation_step_num, 1);
   this->externalForceHandler_.disturbanceCompensationLimit = std::max(i_param.disturbance_compensation_limit, 0.0);
-
-  if(i_param.impedance_M_p.length() == this->gaitParam_.eeName.size() &&
-     i_param.impedance_D_p.length() == this->gaitParam_.eeName.size() &&
-     i_param.impedance_K_p.length() == this->gaitParam_.eeName.size() &&
-     i_param.impedance_M_r.length() == this->gaitParam_.eeName.size() &&
-     i_param.impedance_D_r.length() == this->gaitParam_.eeName.size() &&
-     i_param.impedance_K_r.length() == this->gaitParam_.eeName.size() &&
-     i_param.impedance_force_gain.length() == this->gaitParam_.eeName.size() &&
-     i_param.impedance_moment_gain.length() == this->gaitParam_.eeName.size() &&
-     i_param.impedance_pos_compensation_limit.length() == this->gaitParam_.eeName.size() &&
-     i_param.impedance_rot_compensation_limit.length() == this->gaitParam_.eeName.size()){
-    for(int i=0;i<this->gaitParam_.eeName.size();i++){
-      if(i_param.impedance_M_p[i].length() == 3 &&
-         i_param.impedance_D_p[i].length() == 3 &&
-         i_param.impedance_K_p[i].length() == 3 &&
-         i_param.impedance_M_r[i].length() == 3 &&
-         i_param.impedance_D_r[i].length() == 3 &&
-         i_param.impedance_K_r[i].length() == 3 &&
-         i_param.impedance_force_gain[i].length() == 3 &&
-         i_param.impedance_moment_gain[i].length() == 3 &&
-         i_param.impedance_pos_compensation_limit[i].length() == 3 &&
-         i_param.impedance_rot_compensation_limit[i].length() == 3){
-        for(int j=0;j<3;j++){
-          this->impedanceController_.M[i][j] = std::max(i_param.impedance_M_p[i][j], 0.0);
-          this->impedanceController_.D[i][j] = std::max(i_param.impedance_D_p[i][j], 0.0);
-          this->impedanceController_.K[i][j] = std::max(i_param.impedance_K_p[i][j], 0.0);
-          this->impedanceController_.M[i][3+j] = std::max(i_param.impedance_M_r[i][j], 0.0);
-          this->impedanceController_.D[i][3+j] = std::max(i_param.impedance_D_r[i][j], 0.0);
-          this->impedanceController_.K[i][3+j] = std::max(i_param.impedance_K_r[i][j], 0.0);
-          this->impedanceController_.wrenchGain[i][j] = std::max(i_param.impedance_force_gain[i][j], 0.0);
-          this->impedanceController_.wrenchGain[i][3+j] = std::max(i_param.impedance_moment_gain[i][j], 0.0);
-          if(!this->impedanceController_.isImpedanceMode[i]){
-            this->impedanceController_.compensationLimit[i][j] = std::max(i_param.impedance_pos_compensation_limit[i][j], 0.0);
-            this->impedanceController_.compensationLimit[i][3+j] = std::max(i_param.impedance_rot_compensation_limit[i][j], 0.0);
-          }
-        }
-      }
-    }
-  }
 
   this->cmdVelGenerator_.isGraspLessManipMode = i_param.graspless_manip_mode;
   {
@@ -1551,41 +1459,6 @@ bool TorqueAutoStabilizer::getTorqueAutoStabilizerParam(OpenHRP::TorqueAutoStabi
   i_param.disturbance_compensation_time_const = this->externalForceHandler_.disturbanceCompensationTimeConst;
   i_param.disturbance_compensation_step_num = this->externalForceHandler_.disturbanceCompensationStepNum;
   i_param.disturbance_compensation_limit = this->externalForceHandler_.disturbanceCompensationLimit;
-
-  i_param.impedance_M_p.length(this->gaitParam_.eeName.size());
-  i_param.impedance_D_p.length(this->gaitParam_.eeName.size());
-  i_param.impedance_K_p.length(this->gaitParam_.eeName.size());
-  i_param.impedance_M_r.length(this->gaitParam_.eeName.size());
-  i_param.impedance_D_r.length(this->gaitParam_.eeName.size());
-  i_param.impedance_K_r.length(this->gaitParam_.eeName.size());
-  i_param.impedance_force_gain.length(this->gaitParam_.eeName.size());
-  i_param.impedance_moment_gain.length(this->gaitParam_.eeName.size());
-  i_param.impedance_pos_compensation_limit.length(this->gaitParam_.eeName.size());
-  i_param.impedance_rot_compensation_limit.length(this->gaitParam_.eeName.size());
-  for(int i=0;i<this->gaitParam_.eeName.size();i++){
-    i_param.impedance_M_p[i].length(3);
-    i_param.impedance_D_p[i].length(3);
-    i_param.impedance_K_p[i].length(3);
-    i_param.impedance_M_r[i].length(3);
-    i_param.impedance_D_r[i].length(3);
-    i_param.impedance_K_r[i].length(3);
-    i_param.impedance_force_gain[i].length(3);
-    i_param.impedance_moment_gain[i].length(3);
-    i_param.impedance_pos_compensation_limit[i].length(3);
-    i_param.impedance_rot_compensation_limit[i].length(3);
-    for(int j=0;j<3;j++){
-      i_param.impedance_M_p[i][j] = this->impedanceController_.M[i][j];
-      i_param.impedance_D_p[i][j] = this->impedanceController_.D[i][j];
-      i_param.impedance_K_p[i][j] = this->impedanceController_.K[i][j];
-      i_param.impedance_M_r[i][j] = this->impedanceController_.M[i][3+j];
-      i_param.impedance_D_r[i][j] = this->impedanceController_.D[i][3+j];
-      i_param.impedance_K_r[i][j] = this->impedanceController_.K[i][3+j];
-      i_param.impedance_force_gain[i][j] = this->impedanceController_.wrenchGain[i][j];
-      i_param.impedance_moment_gain[i][j] = this->impedanceController_.wrenchGain[i][3+j];
-      i_param.impedance_pos_compensation_limit[i][j] = this->impedanceController_.compensationLimit[i][j];
-      i_param.impedance_rot_compensation_limit[i][j] = this->impedanceController_.compensationLimit[i][3+j];
-    }
-  }
 
   i_param.graspless_manip_mode = this->cmdVelGenerator_.isGraspLessManipMode;
   i_param.graspless_manip_arm.length(this->cmdVelGenerator_.graspLessManipArm.size());

@@ -197,7 +197,7 @@ void LegCoordsGenerator::calcEETargetPose(const GaitParam& gaitParam, double dt,
     if(i<NUM_LEGS){
       gaitParam.genCoords[i].value(targetPose, targetVel, targetAcc);
     }else{
-      targetPose = gaitParam.icEETargetPose[i];
+      targetPose = gaitParam.refEEPose[i];
       if(this->isInitial) targetVel.setZero();
       else {
         targetVel.head<3>() = (targetPose.translation() - prevPose.translation()) / dt;

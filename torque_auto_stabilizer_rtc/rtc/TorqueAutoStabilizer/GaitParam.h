@@ -82,10 +82,6 @@ public:
   cnoid::Vector3 sbpOffset = cnoid::Vector3::Zero(); // generate frame. 外力考慮重心と重心のオフセット. genCog = genRobot->centerOfMass() - sbpOffset. actCog = actRobot->centerOfMass() - sbpOffset.
   cnoid::Vector3 actCog; // generate frame. 現在のCOMにsbpOffsetを施したもの actCog = actRobot->centerOfMass() - sbpOffset
 
-  // ImpedanceController
-  std::vector<cpp_filters::TwoPointInterpolator<cnoid::Vector6> > icEEOffset; // 要素数と順序はeeNameと同じ.generate frame. endEffector origin. icで計算されるオフセット
-  std::vector<cnoid::Position> icEETargetPose; // 要素数と順序はeeNameと同じ.generate frame. icで計算された目標位置姿勢. icEETargetPose = icEEOffset + refEEPose
-
   // CmdVelGenerator
   cnoid::Vector3 cmdVel = cnoid::Vector3::Zero(); // X[m/s] Y[m/s] theta[rad/s]. Z軸はgenerate frame鉛直. support leg frame. 不連続に変化する
 
@@ -204,8 +200,6 @@ public:
     refEEWrench.push_back(cnoid::Vector6::Zero());
     actEEPose.push_back(cnoid::Position::Identity());
     actEEWrench.push_back(cnoid::Vector6::Zero());
-    icEEOffset.push_back(cpp_filters::TwoPointInterpolator<cnoid::Vector6>(cnoid::Vector6::Zero(),cnoid::Vector6::Zero(),cnoid::Vector6::Zero(), cpp_filters::HOFFARBIB));
-    icEETargetPose.push_back(cnoid::Position::Identity());
     abcEETargetPose.push_back(cnoid::Position::Identity());
     abcEETargetVel.push_back(cnoid::Vector6::Zero());
     abcEETargetAcc.push_back(cnoid::Vector6::Zero());

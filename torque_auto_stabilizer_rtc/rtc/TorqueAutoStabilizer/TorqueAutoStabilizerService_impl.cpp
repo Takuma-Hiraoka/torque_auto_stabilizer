@@ -88,12 +88,12 @@ CORBA::Boolean TorqueAutoStabilizerService_impl::releaseEmergencyStop()
 
 CORBA::Boolean TorqueAutoStabilizerService_impl::startImpedanceController(const char *i_name_)
 {
-  return this->comp_->startImpedanceController(i_name_);
+  return false;
 };
 
 CORBA::Boolean TorqueAutoStabilizerService_impl::stopImpedanceController(const char *i_name_)
 {
-  return this->comp_->stopImpedanceController(i_name_);
+  return false;
 };
 
 CORBA::Boolean TorqueAutoStabilizerService_impl::startWholeBodyMasterSlave(void)

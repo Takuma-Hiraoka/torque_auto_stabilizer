@@ -10,9 +10,9 @@ bool LegManualController::legManualControl(const GaitParam& gaitParam, double dt
       if(o_isManualControlMode[i].getGoal() == 1.0){ // Manual Control on
         cnoid::Position nextCoords;
         if(o_isManualControlMode[i].isEmpty()){
-          nextCoords = gaitParam.icEETargetPose[i];
+          nextCoords = gaitParam.refEEPose[i];
         }else{
-          nextCoords = mathutil::calcMidCoords(std::vector<cnoid::Position>{gaitParam.icEETargetPose[i], gaitParam.genCoords[i].value()},
+          nextCoords = mathutil::calcMidCoords(std::vector<cnoid::Position>{gaitParam.refEEPose[i], gaitParam.genCoords[i].value()},
                                                std::vector<double>{o_isManualControlMode[i].value(), 1.0 - o_isManualControlMode[i].value()});
         }
         o_genCoords[i].reset(nextCoords);

@@ -53,38 +53,6 @@ void CmdVelGenerator::calcVelFromHandError(const GaitParam& gaitParam,
   }
   footPos.translation()[2] = 0.0;
 
-  cnoid::Vector3 handPos; // generate frame. handPos[2]=0.0
-  cnoid::Vector3 dp; // generate frame. dp[2] = 0.0
-  cnoid::Vector3 dr; // generate frame. handPos origin. dr[0] = dr[1] = 0.0
-  if(this->graspLessManipArm.size() == 1){
-    handPos = gaitParam.icEETargetPose[this->graspLessManipArm[0]].translation();
-    dp = gaitParam.icEEOffset[this->graspLessManipArm[0]].value().head<3>();
-    dp[2] = 0.0;
-    dr = gaitParam.icEEOffset[this->graspLessManipArm[0]].value().tail<3>();
-    dr[0] = 0.0; dr[1] = 0.0;
-  }else if(this->graspLessManipArm.size() == 2){
-    handPos = 0.5 * (gaitParam.icEETargetPose[this->graspLessManipArm[0]].translation() + gaitParam.icEETargetPose[this->graspLessManipArm[1]].translation());
-    dp = 0.5 * (gaitParam.icEEOffset[this->graspLessManipArm[0]].value().head<3>() + gaitParam.icEEOffset[this->graspLessManipArm[1]].value().head<3>());
-    cnoid::Vector3 ref1to0Diff = gaitParam.refEEPose[this->graspLessManipArm[0]].translation() - gaitParam.refEEPose[this->graspLessManipArm[1]].translation();
-    cnoid::Vector3 ic1to0Diff = gaitParam.icEETargetPose[this->graspLessManipArm[0]].translation() - gaitParam.icEETargetPose[this->graspLessManipArm[1]].translation();
-    ref1to0Diff[2] = 0.0;
-    ic1to0Diff[2] = 0.0;
-    if(ref1to0Diff.norm() > 0.0 && ic1to0Diff.norm() > 0.0){
-      dr[2] = std::atan2(ref1to0Diff.cross(ic1to0Diff)[2], ref1to0Diff.dot(ic1to0Diff));
-    }else{
-      dr.setZero();
-    }
-  }else{
-    o_graspLessCmdVel = graspLessCmdVel;
-    return;
-  }
-
-  graspLessCmdVel.head<2>() =
-    ((footPos.linear().transpose() * dp).head<2>()
-     + dr.cross(footPos.translation() - handPos).head<2>())
-    .cwiseQuotient(this->graspLessManipTimeConst.head<2>());
-  graspLessCmdVel[2] = dr[2] / this->graspLessManipTimeConst[2];
-
   o_graspLessCmdVel = graspLessCmdVel;
   return;
 }
