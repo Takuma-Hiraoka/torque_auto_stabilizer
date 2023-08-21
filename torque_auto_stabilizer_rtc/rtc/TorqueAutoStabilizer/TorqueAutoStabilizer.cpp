@@ -1498,34 +1498,6 @@ bool TorqueAutoStabilizer::setTorqueAutoStabilizerParam(const OpenHRP::TorqueAut
     }
   }
   
-  this->stabilizer_.swing2LandingTransitionTime = std::max(i_param.swing2landing_transition_time, 0.01);
-  this->stabilizer_.landing2SupportTransitionTime = std::max(i_param.landing2support_transition_time, 0.01);
-  this->stabilizer_.support2SwingTransitionTime = std::max(i_param.support2swing_transition_time, 0.01);
-  if(i_param.support_pgain.length() == NUM_LEGS &&
-     i_param.support_dgain.length() == NUM_LEGS &&
-     i_param.landing_pgain.length() == NUM_LEGS &&
-     i_param.landing_dgain.length() == NUM_LEGS &&
-     i_param.swing_pgain.length() == NUM_LEGS &&
-     i_param.swing_dgain.length() == NUM_LEGS){
-    for(int i=0;i<NUM_LEGS;i++){
-      if(i_param.support_pgain[i].length() == this->stabilizer_.supportPgain[i].size() &&
-         i_param.support_dgain[i].length() == this->stabilizer_.supportPgain[i].size() &&
-         i_param.landing_pgain[i].length() == this->stabilizer_.supportPgain[i].size() &&
-         i_param.landing_dgain[i].length() == this->stabilizer_.supportPgain[i].size() &&
-         i_param.swing_pgain[i].length() == this->stabilizer_.supportPgain[i].size() &&
-         i_param.swing_dgain[i].length() == this->stabilizer_.supportPgain[i].size()){
-        for(int j=0;j<this->stabilizer_.supportPgain[i].size();j++){
-          this->stabilizer_.supportPgain[i][j] = std::min(std::max(i_param.support_pgain[i][j], 0.0), 100.0);
-          this->stabilizer_.supportDgain[i][j] = std::min(std::max(i_param.support_dgain[i][j], 0.0), 100.0);
-          this->stabilizer_.landingPgain[i][j] = std::min(std::max(i_param.landing_pgain[i][j], 0.0), 100.0);
-          this->stabilizer_.landingDgain[i][j] = std::min(std::max(i_param.landing_dgain[i][j], 0.0), 100.0);
-          this->stabilizer_.swingPgain[i][j] = std::min(std::max(i_param.swing_pgain[i][j], 0.0), 100.0);
-          this->stabilizer_.swingDgain[i][j] = std::min(std::max(i_param.swing_dgain[i][j], 0.0), 100.0);
-        }
-      }
-    }
-  }
-
   return true;
 }
 bool TorqueAutoStabilizer::getTorqueAutoStabilizerParam(OpenHRP::TorqueAutoStabilizerService::TorqueAutoStabilizerParam& i_param) {
@@ -1733,32 +1705,6 @@ bool TorqueAutoStabilizer::getTorqueAutoStabilizerParam(OpenHRP::TorqueAutoStabi
   i_param.st_dq_weight.length(this->stabilizer_.aikdqWeight.size());
   for(int i=0;i<this->stabilizer_.aikdqWeight.size();i++){
     i_param.st_dq_weight[i] = this->stabilizer_.aikdqWeight[i].getGoal();
-  }
-
-  i_param.swing2landing_transition_time = this->stabilizer_.swing2LandingTransitionTime;
-  i_param.landing2support_transition_time = this->stabilizer_.landing2SupportTransitionTime;
-  i_param.support2swing_transition_time = this->stabilizer_.support2SwingTransitionTime;
-  i_param.support_pgain.length(NUM_LEGS);
-  i_param.support_dgain.length(NUM_LEGS);
-  i_param.landing_pgain.length(NUM_LEGS);
-  i_param.landing_dgain.length(NUM_LEGS);
-  i_param.swing_pgain.length(NUM_LEGS);
-  i_param.swing_dgain.length(NUM_LEGS);
-  for(int i=0;i<NUM_LEGS;i++){
-    i_param.support_pgain[i].length(this->stabilizer_.supportPgain[i].size());
-    i_param.support_dgain[i].length(this->stabilizer_.supportPgain[i].size());
-    i_param.landing_pgain[i].length(this->stabilizer_.supportPgain[i].size());
-    i_param.landing_dgain[i].length(this->stabilizer_.supportPgain[i].size());
-    i_param.swing_pgain[i].length(this->stabilizer_.supportPgain[i].size());
-    i_param.swing_dgain[i].length(this->stabilizer_.supportPgain[i].size());
-    for(int j=0;j<this->stabilizer_.supportPgain[i].size();j++){
-      i_param.support_pgain[i][j] = this->stabilizer_.supportPgain[i][j];
-      i_param.support_dgain[i][j] = this->stabilizer_.supportDgain[i][j];
-      i_param.landing_pgain[i][j] = this->stabilizer_.landingPgain[i][j];
-      i_param.landing_dgain[i][j] = this->stabilizer_.landingDgain[i][j];
-      i_param.swing_pgain[i][j] = this->stabilizer_.swingPgain[i][j];
-      i_param.swing_dgain[i][j] = this->stabilizer_.swingDgain[i][j];
-    }
   }
 
   return true;

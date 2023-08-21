@@ -15,16 +15,6 @@
 class Stabilizer{
 public:
   // Stabilizerでしか使わないパラメータ
-  std::vector<std::vector<double> > supportPgain = std::vector<std::vector<double> >(2); // 要素数2. [rleg, lleg]. rootLinkから各endeffectorまでの各関節のゲイン. 0~100
-  std::vector<std::vector<double> > supportDgain = std::vector<std::vector<double> >(2); // 要素数2. [rleg, lleg]. rootLinkから各endeffectorまでの各関節のゲイン. 0~100
-  std::vector<std::vector<double> > landingPgain = std::vector<std::vector<double> >(2); // 要素数2. [rleg, lleg]. rootLinkから各endeffectorまでの各関節のゲイン. 0~100
-  std::vector<std::vector<double> > landingDgain = std::vector<std::vector<double> >(2); // 要素数2. [rleg, lleg]. rootLinkから各endeffectorまでの各関節のゲイン. 0~100
-  std::vector<std::vector<double> > swingPgain = std::vector<std::vector<double> >(2); // 要素数2. [rleg, lleg]. rootLinkから各endeffectorまでの各関節のゲイン. 0~100
-  std::vector<std::vector<double> > swingDgain = std::vector<std::vector<double> >(2); // 要素数2. [rleg, lleg]. rootLinkから各endeffectorまでの各関節のゲイン. 0~100
-  double swing2LandingTransitionTime = 0.05; // [s]. 0より大きい
-  double landing2SupportTransitionTime = 0.1; // [s]. 0より大きい
-  double support2SwingTransitionTime = 0.2; // [s]. 0より大きい
-
   std::vector<cnoid::Vector6> ee_K; // 要素数EndEffectors. EndEffector frame. endEffector origin. 0以上
   std::vector<cnoid::Vector6> ee_D; // 要素数EndEffectors. EndEffector frame. endEffector origin. 0以上
   std::vector<cnoid::Vector6> ee_swing_K; // 要素数NUM_LEGS. EndEffector frame. endEffector origin. 0以上
@@ -59,25 +49,6 @@ public:
       ee_landing_K.push_back((cnoid::Vector6() << 200, 200, 20, 100, 100, 100).finished());
       ee_landing_D.push_back((cnoid::Vector6() << 30, 30, 5, 20, 20, 20).finished());
       ee_support_D.push_back((cnoid::Vector6() << 30, 30, 50, 20, 20, 20).finished());
-    }
-
-    for(int i=0;i<NUM_LEGS;i++){
-      cnoid::JointPath jointPath(actRobotTqc->rootLink(), actRobotTqc->link(gaitParam.eeParentLink[i]));
-      if(jointPath.numJoints() == 6){
-        supportPgain[i] = {0,0,0,0,0,0};
-        supportDgain[i] = {0,0,0,0,0,0};
-        landingPgain[i] = {0,0,0,0,0,0};
-        landingDgain[i] = {0,0,0,0,0,0};
-        swingPgain[i] = {0,0,0,0,0,0};
-        swingDgain[i] = {0,0,0,0,0,0};
-      }else{
-        supportPgain[i].resize(jointPath.numJoints(), 100.0);
-        supportDgain[i].resize(jointPath.numJoints(), 100.0);
-        landingPgain[i].resize(jointPath.numJoints(), 100.0);
-        landingDgain[i].resize(jointPath.numJoints(), 100.0);
-        swingPgain[i].resize(jointPath.numJoints(), 100.0);
-        swingDgain[i].resize(jointPath.numJoints(), 100.0);
-      }
     }
 
     aikdqWeight.resize(actRobotTqc->numJoints(), cpp_filters::TwoPointInterpolator<double>(1.0, 0.0, 0.0, cpp_filters::HOFFARBIB));
