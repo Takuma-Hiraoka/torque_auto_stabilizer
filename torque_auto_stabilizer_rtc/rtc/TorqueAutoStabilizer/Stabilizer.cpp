@@ -17,8 +17,8 @@ bool Stabilizer::calcResolvedAccelationControl(const GaitParam& gaitParam, doubl
 				     cnoid::Vector3& o_stTargetZmp, std::vector<cnoid::Vector6>& o_stEETargetWrench,
 				     std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoPGainPercentage, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoDGainPercentage) const{
   // - 現在のactual重心位置から、目標ZMPを計算
-  // - 目標位置姿勢を満たすように分解加速度制御. 重心が倒立振子で加速された場合のトルクを計算
-  // - 目標のZMPを満たすように目標足裏反力を計算、仮想仕事の原理で足し込む
+  // - 目標位置姿勢を満たすように分解加速度制御. 目標加速度を計算
+  // - 目標のZMPと接触レンチを満たすように目標足裏反力を計算、仮想仕事の原理で足し込む
 
   // - 現在のactual重心位置から、目標ZMPを計算
   cnoid::Vector3 tgtForce; // generate frame
@@ -26,12 +26,16 @@ bool Stabilizer::calcResolvedAccelationControl(const GaitParam& gaitParam, doubl
   this->calcZMP(gaitParam, dt, useActState, // input
                 o_stTargetZmp, tgtForce, tgtCogAcc); // output
 
+  // 目標位置姿勢を満たすような目標加速度を計算．actRobotTqcに書き込まれる
   this->calcTorque(dt, gaitParam, useActState, actRobotTqc, tgtCogAcc,
 		   o_stServoPGainPercentage, o_stServoDGainPercentage);
 
-  // 目標ZMPを満たすように目標EndEffector反力を計算
-  this->calcWrench(gaitParam, o_stTargetZmp, tgtForce, useActState,// input
-                   actRobotTqc, o_stEETargetWrench); // output
+  if(useActState)
+    {
+      // 目標ZMPを満たすように目標EndEffector反力を計算
+      this->calcWrench(gaitParam, o_stTargetZmp, tgtForce,// input
+		       actRobotTqc, o_stEETargetWrench); // output
+    }
 
   // 出力トルク制限
   // ラチェッティングトルクはこれよりも小さい
@@ -82,13 +86,24 @@ bool Stabilizer::calcZMP(const GaitParam& gaitParam, double dt, bool useActState
   return true;
 }
 
-bool Stabilizer::calcWrench(const GaitParam& gaitParam, const cnoid::Vector3& tgtZmp/*generate座標系*/, const cnoid::Vector3& tgtForce/*generate座標系 ロボットが受ける力*/, bool useActState, cnoid::BodyPtr& actRobotTqc, 
+bool Stabilizer::calcWrench(const GaitParam& gaitParam, const cnoid::Vector3& tgtZmp/*generate座標系*/, const cnoid::Vector3& tgtForce/*generate座標系 ロボットが受ける力*/, cnoid::BodyPtr& actRobotTqc, 
                             std::vector<cnoid::Vector6>& o_tgtEEWrench) const{
   std::vector<cnoid::Vector6> tgtEEWrench(gaitParam.eeName.size(), cnoid::Vector6::Zero()); /* 要素数EndEffector数. generate frame. EndEffector origin*/
 
   for(int i = 0;i<gaitParam.eeName.size();i++){
     tgtEEWrench[i] = gaitParam.refEEWrench[i];
   }
+
+  actRobotTqc->rootLink()->dv() += cnoid::Vector3(0.0,0.0,gaitParam.g);
+  actRobotTqc->calcForwardKinematics(true, true);
+  actRobotTqc->calcCenterOfMass();
+  cnoid::calcInverseDynamics(actRobotTqc->rootLink()); // actRobotTqc->joint()->u()に書き込まれる
+
+  // std::cerr << "tau" << std::endl; 
+  // for(int i=0;i<actRobotTqc->numJoints();i++){
+  //   std::cerr << actRobotTqc->joint(i)->u() << " ";
+  // }
+  // std::cerr << std::endl;
 
   /*
     legは、legから受けるwrenchの和がtgtZmp, tgtForceを満たすように.
@@ -108,7 +123,7 @@ bool Stabilizer::calcWrench(const GaitParam& gaitParam, const cnoid::Vector3& tg
     4. ノルムの2乗和の最小化 (3の中で微小な重みで一緒にやる)
   */
   // 計算時間は、tgtZmpが支持領域内に無いと遅くなるなので、事前に支持領域内に入るように修正しておくこと
-  const std::vector<cnoid::Position>& EEPose = useActState ? gaitParam.actEEPose : gaitParam.abcEETargetPose;
+  const std::vector<cnoid::Position>& EEPose = gaitParam.actEEPose;
 
   if(gaitParam.footstepNodesList[0].isSupportPhase[RLEG] && !gaitParam.footstepNodesList[0].isSupportPhase[LLEG]){
     if(gaitParam.isManualControlMode[LLEG].getGoal() == 0.0) tgtEEWrench[LLEG].setZero(); // Manual Control ModeであればrefEEWrenchをそのまま使う
@@ -434,26 +449,14 @@ bool Stabilizer::calcTorque(double dt, const GaitParam& gaitParam, bool useActSt
       actRobotTqc->rootLink()->T() = gaitParam.actRobot->rootLink()->T();
       actRobotTqc->rootLink()->v() = cnoid::Vector3::Zero();
       actRobotTqc->rootLink()->w() = cnoid::Vector3::Zero();
-      actRobotTqc->rootLink()->dv() = cnoid::Vector3(0.0,0.0,gaitParam.g);
+      actRobotTqc->rootLink()->dv() = cnoid::Vector3::Zero();
       actRobotTqc->rootLink()->dw() = cnoid::Vector3::Zero();
       for(int i=0;i<actRobotTqc->numJoints();i++){
 	actRobotTqc->joint(i)->q() = gaitParam.actRobot->joint(i)->q();
 	actRobotTqc->joint(i)->dq() = 0.0;
 	actRobotTqc->joint(i)->ddq() = 0.0;
       }
-    }else {
-      actRobotTqc->rootLink()->dv() += cnoid::Vector3(0.0,0.0,gaitParam.g);
     }
-
-    actRobotTqc->calcForwardKinematics(true, true);
-    actRobotTqc->calcCenterOfMass();
-    cnoid::calcInverseDynamics(actRobotTqc->rootLink()); // actRobotTqc->joint()->u()に書き込まれる
-
-    // std::cerr << "tau" << std::endl; 
-    // for(int i=0;i<actRobotTqc->numJoints();i++){
-    //   std::cerr << actRobotTqc->joint(i)->u() << " ";
-    // }
-    // std::cerr << std::endl;
     
     // Gain
     {
