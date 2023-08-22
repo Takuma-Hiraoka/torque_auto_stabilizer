@@ -22,8 +22,8 @@ public:
   std::vector<cnoid::Vector6> ee_landing_K; // 要素数NUM_LEGS. EndEffector frame. endEffector origin. 0以上
   std::vector<cnoid::Vector6> ee_landing_D; // 要素数NUM_LEGS. EndEffector frame. endEffector origin. 0以上
   std::vector<cnoid::Vector6> ee_support_D; // 要素数NUM_LEGS. EndEffector frame. endEffector origin. 0以上
-  cnoid::Vector3 root_K = cnoid::Vector3(100,100,100); // rootlink frame.  0以上
-  cnoid::Vector3 root_D = cnoid::Vector3(10,10,10); // rootlink frame 0以上
+  cnoid::Vector3 root_K = cnoid::Vector3(200,200,200); // rootlink frame.  0以上
+  cnoid::Vector3 root_D = cnoid::Vector3(50,50,50); // rootlink frame 00以上
   cnoid::VectorXd joint_K; // 0以上
   cnoid::VectorXd joint_D; // 0以上
   std::vector<cpp_filters::TwoPointInterpolator<double> > aikdqWeight; // 要素数と順序はrobot->numJoints()と同じ. 0より大きい. 各関節の速度に対するダンピング項の比. default 1. 動かしたくない関節は大きくする. 全く動かしたくないなら、controllable_jointsを使うこと. resolved acceleration control用
@@ -75,7 +75,7 @@ public:
     this->joint_D = cnoid::VectorXd::Zero(gaitParam.actRobotTqc->numJoints());
     for (int i=0;i<gaitParam.actRobotTqc->numJoints();i++){
       this->joint_K[i] = 1;
-      if((i==12) || (i==13) || (i==14)) this->joint_K[i] = 100; // 腰roll pitch yaw
+      if((i==12) || (i==13) || (i==14)) this->joint_K[i] = 20; // 腰roll pitch yaw
     }
     for (int i=0;i<gaitParam.actRobotTqc->numJoints();i++){
       this->joint_D[i] = 1;
@@ -85,9 +85,9 @@ public:
 protected:
   // 計算高速化のためのキャッシュ. クリアしなくても別に副作用はない.
   // for calcWrench
-  mutable std::shared_ptr<prioritized_qp_osqp::Task> constraintTask_ = std::make_shared<prioritized_qp_osqp::Task>();
-  mutable std::shared_ptr<prioritized_qp_osqp::Task> tgtForceTask_ = std::make_shared<prioritized_qp_osqp::Task>();
-  mutable std::shared_ptr<prioritized_qp_osqp::Task> tgtTorqueTask_ = std::make_shared<prioritized_qp_osqp::Task>();
+  mutable std::shared_ptr<prioritized_qp_osqp::Task> eomTask_ = std::make_shared<prioritized_qp_osqp::Task>();
+  mutable std::shared_ptr<prioritized_qp_osqp::Task> wrenchConstraintTask_ = std::make_shared<prioritized_qp_osqp::Task>();
+  mutable std::shared_ptr<prioritized_qp_osqp::Task> torqueLimitTask_ = std::make_shared<prioritized_qp_osqp::Task>();
   mutable std::shared_ptr<prioritized_qp_osqp::Task> normTask_ = std::make_shared<prioritized_qp_osqp::Task>();
   // for calcTorque
   mutable std::vector<std::shared_ptr<aik_constraint::PositionConstraint> > aikEEPositionConstraint; // 要素数と順序はeeNameと同じ.
