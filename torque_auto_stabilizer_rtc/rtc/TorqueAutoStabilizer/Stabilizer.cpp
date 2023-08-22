@@ -189,10 +189,10 @@ bool Stabilizer::calcWrench(const GaitParam& gaitParam, cnoid::BodyPtr& actRobot
       this->eomTask_->toSolve() = false;
       this->eomTask_->settings().verbose = 0;
 
-      std::cerr << "eomTask_->A()" << std::endl;
-      std::cerr << this->eomTask_->A() << std::endl;
-      std::cerr << "eomTask_->b()" << std::endl;
-      std::cerr << this->eomTask_->b() << std::endl;
+      // std::cerr << "eomTask_->A()" << std::endl;
+      // std::cerr << this->eomTask_->A() << std::endl;
+      // std::cerr << "eomTask_->b()" << std::endl;
+      // std::cerr << this->eomTask_->b() << std::endl;
     }
 
     {
@@ -239,8 +239,8 @@ bool Stabilizer::calcWrench(const GaitParam& gaitParam, cnoid::BodyPtr& actRobot
       this->wrenchConstraintTask_->toSolve() = true;
       this->wrenchConstraintTask_->settings().verbose = 0;
 
-      std::cerr << "wrenchConstraintTask_->C()" << std::endl;
-      std::cerr << this->wrenchConstraintTask_->C() << std::endl;
+      // std::cerr << "wrenchConstraintTask_->C()" << std::endl;
+      // std::cerr << this->wrenchConstraintTask_->C() << std::endl;
     }
 
     {
@@ -291,8 +291,6 @@ bool Stabilizer::calcWrench(const GaitParam& gaitParam, cnoid::BodyPtr& actRobot
       this->normTask_->settings().check_termination = 5; // default 25. 高速化
       this->normTask_->settings().verbose = 0;
       
-      std::cerr << "normTask_->w()" << std::endl;
-      std::cerr << this->normTask_->w() << std::endl;
     }
 
     std::vector<std::shared_ptr<prioritized_qp_base::Task> > tasks{this->eomTask_,this->wrenchConstraintTask_,this->torqueLimitTask_,this->normTask_};
@@ -308,18 +306,18 @@ bool Stabilizer::calcWrench(const GaitParam& gaitParam, cnoid::BodyPtr& actRobot
         tgtEEWrench[leg].head<3>() += gaitParam.actEEPose[leg].linear() * w.head<3>();
         tgtEEWrench[leg].tail<3>() += gaitParam.actEEPose[leg].linear() * w.tail<3>();
         tgtEEWrench[leg].tail<3>() += (gaitParam.actEEPose[leg].linear() * gaitParam.copOffset[leg].value()).cross(gaitParam.actEEPose[leg].linear() * w.head<3>());
-	std::cerr << w << std::endl;
+	// std::cerr << w << std::endl;
       }
     }else{
       std::cerr << "false" << std::endl;
     }
   }
 
-  std::cerr << "tau" << std::endl; 
-  for(int i=0;i<actRobotTqc->numJoints();i++){
-    std::cerr << actRobotTqc->joint(i)->u() << " ";
-  }
-  std::cerr << std::endl;
+  // std::cerr << "tau" << std::endl; 
+  // for(int i=0;i<actRobotTqc->numJoints();i++){
+  //   std::cerr << actRobotTqc->joint(i)->u() << " ";
+  // }
+  // std::cerr << std::endl;
 
   o_tgtEEWrench = tgtEEWrench;
   return true;

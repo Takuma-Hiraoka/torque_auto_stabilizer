@@ -75,11 +75,11 @@ public:
     this->joint_D = cnoid::VectorXd::Zero(gaitParam.actRobotTqc->numJoints());
     for (int i=0;i<gaitParam.actRobotTqc->numJoints();i++){
       this->joint_K[i] = 1;
-      if((i==12) || (i==13) || (i==14)) this->joint_K[i] = 20; // 腰roll pitch yaw
+      if((i==12) || (i==13) || (i==14)) this->joint_K[i] = 100; // 腰roll pitch yaw
     }
     for (int i=0;i<gaitParam.actRobotTqc->numJoints();i++){
       this->joint_D[i] = 1;
-      if((i==12) || (i==13) || (i==14)) this->joint_D[i] = 10; // 腰roll pitch yaw
+      if((i==12) || (i==13) || (i==14)) this->joint_D[i] = 50; // 腰roll pitch yaw
     }
   }
 protected:
