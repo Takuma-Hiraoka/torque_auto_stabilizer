@@ -185,7 +185,7 @@ bool Stabilizer::calcResolvedAccelerationControl(double dt, const GaitParam& gai
       this->aikComConstraint->pgain().setZero(); // footguidedで計算された加速をそのまま使う
       this->aikComConstraint->dgain().setZero(); // footguidedで計算された加速をそのまま使う
       this->aikComConstraint->ref_acc() = targetCogAcc; // footguidedで計算された加速をそのまま使う
-      this->aikComConstraint->weight() << 3.0, 3.0, 1.0; // 0.1, wn=1e-4だと、wnに負けて不正確になる
+      this->aikComConstraint->weight() << 10.0, 10.0, 1.0; // 0.1, wn=1e-4だと、wnに負けて不正確になる
       ikConstraint2.push_back(this->aikComConstraint);
     }
     {
