@@ -102,18 +102,17 @@ public:
   void initStabilizerOutput(const GaitParam& gaitParam,
                             cnoid::Vector3& o_stTargetZmp, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoPGainPercentage, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoDGainPercentage) const;
 
-  bool calcResolvedAccelationControl(const GaitParam& gaitParam, double dt, bool useActState, cnoid::BodyPtr& actRobotTqc, 
+  bool execStabilizer(const GaitParam& gaitParam, double dt, bool useActState, cnoid::BodyPtr& actRobotTqc, 
 				     cnoid::Vector3& o_stTargetZmp, std::vector<cnoid::Vector6>& o_stEETargetWrench,
 				     std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoPGainPercentage, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoDGainPercentage) const;
 
 protected:
-  bool calcZMP(const GaitParam& gaitParam, double dt, bool useActState,
-               cnoid::Vector3& o_tgtZmp/*generate座標系*/, cnoid::Vector3& o_tgtForce/*generate座標系*/, cnoid::Vector3& o_tgtCogAcc /*generate座標系*/) const;
-  bool calcWrench(const GaitParam& gaitParam, cnoid::BodyPtr& actRobotTqc, 
-                  std::vector<cnoid::Vector6>& o_tgtEEWrench /* 要素数EndEffector数. generate座標系. EndEffector origin*/) const;
-  bool calcTorque(double dt, const GaitParam& gaitParam, bool useActState, cnoid::BodyPtr& actRobotTqc, const cnoid::Vector3& targetCogAcc, 
+  bool calcCogAcc(const GaitParam& gaitParam, double dt, bool useActState,
+               cnoid::Vector3& o_tgtZmp/*generate座標系*/, cnoid::Vector3& o_tgtCogAcc /*generate座標系*/) const;
+  bool calcResolvedAccelerationControl(double dt, const GaitParam& gaitParam, bool useActState, cnoid::BodyPtr& actRobotTqc, const cnoid::Vector3& targetCogAcc, 
                   std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoPGainPercentage, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoDGainPercentage) const;
-
+  bool calcTorque(const GaitParam& gaitParam, cnoid::BodyPtr& actRobotTqc, 
+                  std::vector<cnoid::Vector6>& o_tgtEEWrench /* 要素数EndEffector数. generate座標系. EndEffector origin*/) const;
 };
 
 #endif

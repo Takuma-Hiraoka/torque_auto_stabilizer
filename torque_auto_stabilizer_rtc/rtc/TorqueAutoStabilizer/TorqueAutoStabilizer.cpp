@@ -615,7 +615,7 @@ bool TorqueAutoStabilizer::execAutoStabilizer(const TorqueAutoStabilizer::Contro
 				     gaitParam.genRobot); // output
   }
 
-  stabilizer.calcResolvedAccelationControl(gaitParam, dt, mode.isSTRunning(), gaitParam.actRobotTqc,
+  stabilizer.execStabilizer(gaitParam, dt, mode.isSTRunning(), gaitParam.actRobotTqc,
 					   gaitParam.stTargetZmp, gaitParam.stEETargetWrench,
 					   gaitParam.stServoPGainPercentage, gaitParam.stServoDGainPercentage);
 

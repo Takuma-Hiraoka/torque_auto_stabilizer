@@ -13,35 +13,34 @@ void Stabilizer::initStabilizerOutput(const GaitParam& gaitParam,
   }
 }
 
-bool Stabilizer::calcResolvedAccelationControl(const GaitParam& gaitParam, double dt, bool useActState, cnoid::BodyPtr& actRobotTqc, 
+bool Stabilizer::execStabilizer(const GaitParam& gaitParam, double dt, bool useActState, cnoid::BodyPtr& actRobotTqc, 
 				     cnoid::Vector3& o_stTargetZmp, std::vector<cnoid::Vector6>& o_stEETargetWrench,
 				     std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoPGainPercentage, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoDGainPercentage) const{
   // - 現在のactual重心位置から、目標ZMPを計算
   // - 目標位置姿勢を満たすように分解加速度制御. 目標加速度を計算
   // - 目標のZMPと接触レンチを満たすように目標足裏反力を計算、仮想仕事の原理で足し込む
 
-  // - 現在のactual重心位置から、目標ZMPを計算
-  cnoid::Vector3 tgtForce; // generate frame
+  // - 現在のactual重心位置から、目標加速を計算
   cnoid::Vector3 tgtCogAcc; // generate frame
-  this->calcZMP(gaitParam, dt, useActState, // input
-                o_stTargetZmp, tgtForce, tgtCogAcc); // output
+  this->calcCogAcc(gaitParam, dt, useActState, // input
+                o_stTargetZmp, tgtCogAcc); // output
 
   // 目標位置姿勢を満たすような目標加速度を計算．actRobotTqcに書き込まれる
-  this->calcTorque(dt, gaitParam, useActState, actRobotTqc, tgtCogAcc,
+  this->calcResolvedAccelerationControl(dt, gaitParam, useActState, actRobotTqc, tgtCogAcc,
 		   o_stServoPGainPercentage, o_stServoDGainPercentage);
 
   if(useActState)
     {
-      // 目標ZMPを満たすように目標EndEffector反力を計算
-      this->calcWrench(gaitParam,// input
+      // 目標加速度と接触力を満たすように目標トルクを計算
+      this->calcTorque(gaitParam,// input
 		       actRobotTqc, o_stEETargetWrench); // output
     }
 
   return true;
 };
 
-bool Stabilizer::calcZMP(const GaitParam& gaitParam, double dt, bool useActState,
-                         cnoid::Vector3& o_tgtZmp, cnoid::Vector3& o_tgtForce, cnoid::Vector3& o_tgtCogAcc) const{
+bool Stabilizer::calcCogAcc(const GaitParam& gaitParam, double dt, bool useActState,
+                         cnoid::Vector3& o_tgtZmp, cnoid::Vector3& o_tgtCogAcc) const{
   cnoid::Vector3 cog = useActState ? gaitParam.actCog : gaitParam.genCog;
   cnoid::Vector3 cogVel = useActState ? gaitParam.actCogVel.value() : gaitParam.genCogVel;
   cnoid::Vector3 DCM = cog + cogVel / gaitParam.omega;
@@ -75,255 +74,11 @@ bool Stabilizer::calcZMP(const GaitParam& gaitParam, double dt, bool useActState
   // tgtForceにrefEEWrenchのXY成分を足す TODO
 
   o_tgtZmp = tgtZmp;
-  o_tgtForce = tgtForce;
   o_tgtCogAcc = tgtCogAcc;
   return true;
 }
 
-bool Stabilizer::calcWrench(const GaitParam& gaitParam, cnoid::BodyPtr& actRobotTqc, 
-                            std::vector<cnoid::Vector6>& o_tgtEEWrench) const{
-  std::vector<cnoid::Vector6> tgtEEWrench(gaitParam.eeName.size(), cnoid::Vector6::Zero()); /* 要素数EndEffector数. generate frame. EndEffector origin*/
-
-  for(int i = 0;i<gaitParam.eeName.size();i++){
-    tgtEEWrench[i] = gaitParam.refEEWrench[i];
-  }
-
-  actRobotTqc->rootLink()->dv() += cnoid::Vector3(0.0,0.0,gaitParam.g);
-  actRobotTqc->calcForwardKinematics(true, true);
-  actRobotTqc->calcCenterOfMass();
-
-  cnoid::Vector6 tgtSupWrench = cnoid::Vector6::Zero(); // ルートリンクが支持脚から受ける必要がある外力. generate frame. cog origin.
-
-  cnoid::Vector6 tgtSupWrench_o = cnoid::Vector6::Zero(); // ルートリンクが支持脚から受ける必要がある外力. generate frame. generate frame origin.
-  tgtSupWrench_o = cnoid::calcInverseDynamics(actRobotTqc->rootLink()); // actRobotTqc->joint()->u()に書き込まれる 
-
-  tgtSupWrench.head<3>() = tgtSupWrench_o.head<3>();
-  tgtSupWrench.tail<3>() = tgtSupWrench_o.tail<3>();
-  tgtSupWrench.tail<3>() += (- actRobotTqc->centerOfMass()).cross(tgtSupWrench_o.head<3>());
-
-  cnoid::VectorXd tgtAccTau = cnoid::VectorXd::Zero(actRobotTqc->numJoints());
-  for(int i=0;i<actRobotTqc->numJoints();i++){
-    tgtAccTau[i] =  actRobotTqc->joint(i)->u();
-  }
-  
-
-  // std::cerr << "tau" << std::endl; 
-  // for(int i=0;i<actRobotTqc->numJoints();i++){
-  //   std::cerr << actRobotTqc->joint(i)->u() << " ";
-  // }
-  // std::cerr << std::endl;
-
-  std::vector<int> supportEE;
-  if(gaitParam.footstepNodesList[0].isSupportPhase[RLEG] && !gaitParam.footstepNodesList[0].isSupportPhase[LLEG]){
-    supportEE = {RLEG};
-  }else if(!gaitParam.footstepNodesList[0].isSupportPhase[RLEG] && gaitParam.footstepNodesList[0].isSupportPhase[LLEG]){
-    supportEE = {LLEG};
-  }else if(!gaitParam.footstepNodesList[0].isSupportPhase[RLEG] && !gaitParam.footstepNodesList[0].isSupportPhase[LLEG]){
-    // 滞空期
-  }else{
-    supportEE = {RLEG, LLEG};
-  }
-
-
-  if(supportEE.size()>0){
-
-    /*
-      探索変数はトルクと接触力
-      階層QPのタスクは次の通り
-      1. 運動方程式
-      2. 接触力制約
-      3. トルク上下限
-      4. 2乗ノルム最小化
-    */
-
-    const int dim = actRobotTqc->numJoints() + 6 * supportEE.size();
-    {
-      /*
-      1. 運動方程式
-	M (ddq) + C + g = (0, tau)^T + J^T W
-	左辺はcalcInverseDynamicsによってtgtSupWrenchとactRobotTqc->joint(i)->u()に格納されている．
-      */
-      this->eomTask_->A() = Eigen::SparseMatrix<double,Eigen::RowMajor>(6+actRobotTqc->numJoints(),dim);
-      std::vector<Eigen::Triplet<double> > eomTripletList_A;
-      eomTripletList_A.reserve(500);//適当
-
-      // (0, tau)
-      for (int i=0;i<actRobotTqc->numJoints();i++) {
-	eomTripletList_A.push_back(Eigen::Triplet<double>(6+i,i,1));
-      }
-
-      // J^T W
-      for (int i=0;i<supportEE.size();i++){
-	cnoid::JointPath jointPath(actRobotTqc->rootLink(), actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]]));
-	cnoid::MatrixXd J = cnoid::MatrixXd::Zero(6,jointPath.numJoints()); // generate frame.
-	cnoid::setJacobian<0x3f,0,0,true>(jointPath,actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]]),gaitParam.eeLocalT[supportEE[i]].translation(), // input
-					      J); // output
-	// 該当する箇所に代入. 転置に注意
-	for (int j=0;j<jointPath.numJoints();j++) {
-	  for(int k=0;k<6;k++){
-	    eomTripletList_A.push_back(Eigen::Triplet<double>(6+jointPath.joint(j)->jointId(), actRobotTqc->numJoints()+6*i+k,J(k,j)));
-	  }
-	}
-
-	for(int j=0;j<6;j++) eomTripletList_A.push_back(Eigen::Triplet<double>(j,actRobotTqc->numJoints()+ 6*i + j,1.0));
-	cnoid::Vector3 dp = (actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]])->T() * gaitParam.eeLocalT[supportEE[i]]).translation() - actRobotTqc->rootLink()->p();
-	eomTripletList_A.push_back(Eigen::Triplet<double>(4,actRobotTqc->numJoints() + 0 + 6*i, dp[2]));
-	eomTripletList_A.push_back(Eigen::Triplet<double>(5,actRobotTqc->numJoints() + 0 + 6*i,-dp[1]));
-	eomTripletList_A.push_back(Eigen::Triplet<double>(3,actRobotTqc->numJoints() + 1 + 6*i,-dp[2]));
-	eomTripletList_A.push_back(Eigen::Triplet<double>(5,actRobotTqc->numJoints() + 1 + 6*i, dp[0]));
-	eomTripletList_A.push_back(Eigen::Triplet<double>(3,actRobotTqc->numJoints() + 2 + 6*i, dp[1]));
-	eomTripletList_A.push_back(Eigen::Triplet<double>(4,actRobotTqc->numJoints() + 2 + 6*i,-dp[0]));
-      }
-      this->eomTask_->A().setFromTriplets(eomTripletList_A.begin(), eomTripletList_A.end());
-      this->eomTask_->b() = Eigen::VectorXd::Zero(6+actRobotTqc->numJoints());
-      this->eomTask_->b().head<6>() = tgtSupWrench;
-      this->eomTask_->b().tail(actRobotTqc->numJoints()) = tgtAccTau;
-      this->eomTask_->wa() = cnoid::VectorX::Ones(6+actRobotTqc->numJoints());
-
-      this->eomTask_->C() = Eigen::SparseMatrix<double,Eigen::RowMajor>(0,dim);
-      this->eomTask_->dl() = Eigen::VectorXd::Zero(0);
-      this->eomTask_->du() = Eigen::VectorXd::Ones(0);
-      this->eomTask_->wc() = cnoid::VectorX::Ones(0);
-
-      this->eomTask_->w() = cnoid::VectorX::Ones(dim) * 1e-6;
-      this->eomTask_->toSolve() = false;
-      this->eomTask_->settings().verbose = 0;
-
-      // std::cerr << "eomTask_->A()" << std::endl;
-      // std::cerr << this->eomTask_->A() << std::endl;
-      // std::cerr << "eomTask_->b()" << std::endl;
-      // std::cerr << this->eomTask_->b() << std::endl;
-    }
-
-    {
-      // 2. 接触力制約
-      // 0 <  0  0  1  0  0  0 < 1e10
-      // 0 <  1  0 mt  0  0  0 < 1e10
-      // 0 < -1  0 mt  0  0  0 < 1e10
-      // 0 <  0  1 mt  0  0  0 < 1e10
-      // 0 <  0 -1 mt  0  0  0 < 1e10
-      // 0 <  0  0  d r1 r2  0 < 1e10 ;; x legHull.size()
-      // 0 <  0  0 mr  0  0  1 < 1e10
-      // 0 <  0  0 mr  0  0 -1 < 1e10
-
-      this->wrenchConstraintTask_->A() = Eigen::SparseMatrix<double,Eigen::RowMajor>(0,dim);
-      this->wrenchConstraintTask_->b() = Eigen::VectorXd::Zero(0);
-      this->wrenchConstraintTask_->wa() = cnoid::VectorX::Ones(0);
-
-      int wrenchConstraintDim = 0;
-      for(int i=0;i<supportEE.size();i++) wrenchConstraintDim += 7+gaitParam.legHull[supportEE[i]].size();
-      this->wrenchConstraintTask_->C() = Eigen::SparseMatrix<double,Eigen::RowMajor>(wrenchConstraintDim,dim);
-      this->wrenchConstraintTask_->dl() = Eigen::VectorXd::Zero(wrenchConstraintDim);
-      this->wrenchConstraintTask_->du() = 1e10 * Eigen::VectorXd::Ones(wrenchConstraintDim);
-      this->wrenchConstraintTask_->wc() = cnoid::VectorX::Ones(wrenchConstraintDim);
-      for(int i=0, idx=0;i<supportEE.size();i++){
-        int leg = supportEE[i];
-        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = 1.0; this->wrenchConstraintTask_->dl()[idx] = 50.0; idx++;
-        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+0) = 1.0; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = gaitParam.muTrans[leg]; idx++;
-        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+0) = -1.0; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = gaitParam.muTrans[leg]; idx++;
-        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+1) = 1.0; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = gaitParam.muTrans[leg]; idx++;
-        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+1) = -1.0; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = gaitParam.muTrans[leg]; idx++;
-        for(int j=0;j<gaitParam.legHull[leg].size();j++){
-          cnoid::Vector3 v1 = gaitParam.legHull[leg][j] - gaitParam.copOffset[leg].value(); // EEF+copOffset frame/origin
-          cnoid::Vector3 v2 = gaitParam.legHull[leg][(j+1<gaitParam.legHull[leg].size())?j+1:0] - gaitParam.copOffset[leg].value(); // EEF+copOffset frame/origin
-          if(v1.head<2>() == v2.head<2>()) continue;
-          cnoid::Vector3 r = cnoid::Vector3(v2[1]-v1[1],v1[0]-v2[0],0).normalized();
-          double d = r.dot(v1);
-          this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = d; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+3) = -r[1]; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+4) = r[0]; idx++;
-        }
-        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+5) = 1.0; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = gaitParam.muRot[leg]; idx++;
-        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+5) = -1.0; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = gaitParam.muRot[leg]; idx++;
-      }
-
-      this->wrenchConstraintTask_->w() = cnoid::VectorX::Ones(dim) * 1e-6;
-      this->wrenchConstraintTask_->toSolve() = true;
-      this->wrenchConstraintTask_->settings().verbose = 0;
-
-      // std::cerr << "wrenchConstraintTask_->C()" << std::endl;
-      // std::cerr << this->wrenchConstraintTask_->C() << std::endl;
-    }
-
-    {
-      // 3. トルク上下限
-      this->torqueLimitTask_->A() = Eigen::SparseMatrix<double,Eigen::RowMajor>(0,dim);
-      this->torqueLimitTask_->b() = Eigen::VectorXd::Zero(0);
-      this->torqueLimitTask_->wa() = cnoid::VectorX::Ones(0);
-
-      this->torqueLimitTask_->C() = Eigen::SparseMatrix<double,Eigen::RowMajor>(actRobotTqc->numJoints(),dim);
-      this->torqueLimitTask_->dl() = Eigen::VectorXd::Zero(actRobotTqc->numJoints());
-      this->torqueLimitTask_->du() = Eigen::VectorXd::Zero(actRobotTqc->numJoints());
-      for(int i=0; i<actRobotTqc->numJoints();i++){
-	this->torqueLimitTask_->dl()[i] = - this->torque_limit[i];
-	this->torqueLimitTask_->du()[i] = this->torque_limit[i];
-      }
-      this->torqueLimitTask_->wc() = cnoid::VectorX::Ones(actRobotTqc->numJoints());
-
-      this->torqueLimitTask_->w() = cnoid::VectorX::Ones(dim) * 1e-6;
-      this->torqueLimitTask_->toSolve() = true;
-      this->torqueLimitTask_->settings().verbose = 0;
-    }
-
-    {
-      // 4. ノルムの2乗和の最小化
-      this->normTask_->A() = Eigen::SparseMatrix<double,Eigen::RowMajor>(0,dim);
-      this->normTask_->b() = Eigen::VectorXd::Zero(0);
-      this->normTask_->wa() = cnoid::VectorX::Ones(0);
-
-      this->normTask_->C() = Eigen::SparseMatrix<double,Eigen::RowMajor>(0,dim);
-      this->normTask_->dl() = Eigen::VectorXd::Zero(0);
-      this->normTask_->du() = Eigen::VectorXd::Ones(0);
-      this->normTask_->wc() = cnoid::VectorX::Ones(0);
-
-      this->normTask_->w() = cnoid::VectorX::Ones(dim);
-      for(int i=0;i<actRobotTqc->numJoints();i++){
-	this->normTask_->w()[i] = std::pow(1e0, 2.0);
-      }
-      for(int i=0;i<supportEE.size();i++){
-        this->normTask_->w()[actRobotTqc->numJoints()+i*6+0] = std::pow(1e2, 2.0);
-        this->normTask_->w()[actRobotTqc->numJoints()+i*6+1] = std::pow(1e2, 2.0);
-        this->normTask_->w()[actRobotTqc->numJoints()+i*6+2] = std::pow(1e0, 2.0);
-        this->normTask_->w()[actRobotTqc->numJoints()+i*6+3] = std::pow(1e2, 2.0);
-        this->normTask_->w()[actRobotTqc->numJoints()+i*6+4] = std::pow(1e2, 2.0);
-        this->normTask_->w()[actRobotTqc->numJoints()+i*6+5] = std::pow(1e3, 2.0);
-      }
-
-      this->normTask_->toSolve() = true;
-      this->normTask_->settings().check_termination = 5; // default 25. 高速化
-      this->normTask_->settings().verbose = 0;
-      
-    }
-
-    std::vector<std::shared_ptr<prioritized_qp_base::Task> > tasks{this->eomTask_,this->wrenchConstraintTask_,this->torqueLimitTask_,this->normTask_};
-    cnoid::VectorX result; // EEF+copOffset frame/origin
-    if(prioritized_qp_base::solve(tasks,
-                                   result,
-                                   0 // debuglevel
-                                   )){
-      for(int i=0;i<actRobotTqc->numJoints();i++) actRobotTqc->joint(i)->u() = result[i];
-      for(int i=0;i<supportEE.size();i++){
-        int leg = supportEE[i];
-        cnoid::Vector6 w = result.segment<6>(actRobotTqc->numJoints()+i*6); // EEF+copOffset frame/origin
-        tgtEEWrench[leg].head<3>() += gaitParam.actEEPose[leg].linear() * w.head<3>();
-        tgtEEWrench[leg].tail<3>() += gaitParam.actEEPose[leg].linear() * w.tail<3>();
-        tgtEEWrench[leg].tail<3>() += (gaitParam.actEEPose[leg].linear() * gaitParam.copOffset[leg].value()).cross(gaitParam.actEEPose[leg].linear() * w.head<3>());
-	// std::cerr << w << std::endl;
-      }
-    }else{
-      std::cerr << "false" << std::endl;
-    }
-  }
-
-  // std::cerr << "tau" << std::endl; 
-  // for(int i=0;i<actRobotTqc->numJoints();i++){
-  //   std::cerr << actRobotTqc->joint(i)->u() << " ";
-  // }
-  // std::cerr << std::endl;
-
-  o_tgtEEWrench = tgtEEWrench;
-  return true;
-}
-
-bool Stabilizer::calcTorque(double dt, const GaitParam& gaitParam, bool useActState, cnoid::BodyPtr& actRobotTqc, const cnoid::Vector3& targetCogAcc,
+bool Stabilizer::calcResolvedAccelerationControl(double dt, const GaitParam& gaitParam, bool useActState, cnoid::BodyPtr& actRobotTqc, const cnoid::Vector3& targetCogAcc,
                             std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoPGainPercentage, std::vector<cpp_filters::TwoPointInterpolator<double> >& o_stServoDGainPercentage) const{
 
   if(!useActState){
@@ -535,3 +290,236 @@ bool Stabilizer::calcTorque(double dt, const GaitParam& gaitParam, bool useActSt
   return true;
 }
 
+bool Stabilizer::calcTorque(const GaitParam& gaitParam, cnoid::BodyPtr& actRobotTqc, 
+                            std::vector<cnoid::Vector6>& o_tgtEEWrench) const{
+  std::vector<cnoid::Vector6> tgtEEWrench(gaitParam.eeName.size(), cnoid::Vector6::Zero()); /* 要素数EndEffector数. generate frame. EndEffector origin*/
+
+  // TODO wrench for manipulation
+
+  actRobotTqc->rootLink()->dv() += cnoid::Vector3(0.0,0.0,gaitParam.g);
+  actRobotTqc->calcForwardKinematics(true, true);
+  actRobotTqc->calcCenterOfMass();
+
+  cnoid::Vector6 tgtSupWrench = cnoid::Vector6::Zero(); // ルートリンクが支持脚から受ける必要がある外力. generate frame. cog origin.
+
+  cnoid::Vector6 tgtSupWrench_o = cnoid::Vector6::Zero(); // ルートリンクが支持脚から受ける必要がある外力. generate frame. generate frame origin.
+  tgtSupWrench_o = cnoid::calcInverseDynamics(actRobotTqc->rootLink()); // actRobotTqc->joint()->u()に書き込まれる 
+
+  tgtSupWrench.head<3>() = tgtSupWrench_o.head<3>();
+  tgtSupWrench.tail<3>() = tgtSupWrench_o.tail<3>();
+  tgtSupWrench.tail<3>() += (- actRobotTqc->centerOfMass()).cross(tgtSupWrench_o.head<3>());
+
+  cnoid::VectorXd tgtAccTau = cnoid::VectorXd::Zero(actRobotTqc->numJoints());
+  for(int i=0;i<actRobotTqc->numJoints();i++){
+    tgtAccTau[i] =  actRobotTqc->joint(i)->u();
+  }
+
+  std::vector<int> supportEE;
+  if(gaitParam.footstepNodesList[0].isSupportPhase[RLEG] && !gaitParam.footstepNodesList[0].isSupportPhase[LLEG]){
+    supportEE = {RLEG};
+  }else if(!gaitParam.footstepNodesList[0].isSupportPhase[RLEG] && gaitParam.footstepNodesList[0].isSupportPhase[LLEG]){
+    supportEE = {LLEG};
+  }else if(!gaitParam.footstepNodesList[0].isSupportPhase[RLEG] && !gaitParam.footstepNodesList[0].isSupportPhase[LLEG]){
+    // 滞空期
+  }else{
+    supportEE = {RLEG, LLEG};
+  }
+
+
+  if(supportEE.size()>0){
+
+    /*
+      探索変数はトルクと接触力
+      階層QPのタスクは次の通り
+      1. 運動方程式
+      2. 接触力制約
+      3. トルク上下限
+      4. 2乗ノルム最小化
+    */
+
+    const int dim = actRobotTqc->numJoints() + 6 * supportEE.size();
+    {
+      /*
+      1. 運動方程式
+	M (ddq) + C + g = (0, tau)^T + J^T W
+	左辺はcalcInverseDynamicsによってtgtSupWrenchとactRobotTqc->joint(i)->u()に格納されている．
+      */
+      this->eomTask_->A() = Eigen::SparseMatrix<double,Eigen::RowMajor>(6+actRobotTqc->numJoints(),dim);
+      std::vector<Eigen::Triplet<double> > eomTripletList_A;
+      eomTripletList_A.reserve(500);//適当
+
+      // (0, tau)
+      for (int i=0;i<actRobotTqc->numJoints();i++) {
+	eomTripletList_A.push_back(Eigen::Triplet<double>(6+i,i,1));
+      }
+
+      // J^T W
+      for (int i=0;i<supportEE.size();i++){
+	cnoid::JointPath jointPath(actRobotTqc->rootLink(), actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]]));
+	cnoid::MatrixXd J = cnoid::MatrixXd::Zero(6,jointPath.numJoints()); // generate frame.
+	cnoid::setJacobian<0x3f,0,0,true>(jointPath,actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]]),gaitParam.eeLocalT[supportEE[i]].translation(), // input
+					      J); // output
+	// 該当する箇所に代入. 転置に注意
+	for (int j=0;j<jointPath.numJoints();j++) {
+	  for(int k=0;k<6;k++){
+	    eomTripletList_A.push_back(Eigen::Triplet<double>(6+jointPath.joint(j)->jointId(), actRobotTqc->numJoints()+6*i+k,J(k,j)));
+	  }
+	}
+
+	for(int j=0;j<6;j++) eomTripletList_A.push_back(Eigen::Triplet<double>(j,actRobotTqc->numJoints()+ 6*i + j,1.0));
+	cnoid::Vector3 dp = (actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]])->T() * gaitParam.eeLocalT[supportEE[i]]).translation() - actRobotTqc->rootLink()->p();
+	eomTripletList_A.push_back(Eigen::Triplet<double>(4,actRobotTqc->numJoints() + 0 + 6*i, dp[2]));
+	eomTripletList_A.push_back(Eigen::Triplet<double>(5,actRobotTqc->numJoints() + 0 + 6*i,-dp[1]));
+	eomTripletList_A.push_back(Eigen::Triplet<double>(3,actRobotTqc->numJoints() + 1 + 6*i,-dp[2]));
+	eomTripletList_A.push_back(Eigen::Triplet<double>(5,actRobotTqc->numJoints() + 1 + 6*i, dp[0]));
+	eomTripletList_A.push_back(Eigen::Triplet<double>(3,actRobotTqc->numJoints() + 2 + 6*i, dp[1]));
+	eomTripletList_A.push_back(Eigen::Triplet<double>(4,actRobotTqc->numJoints() + 2 + 6*i,-dp[0]));
+      }
+      this->eomTask_->A().setFromTriplets(eomTripletList_A.begin(), eomTripletList_A.end());
+      this->eomTask_->b() = Eigen::VectorXd::Zero(6+actRobotTqc->numJoints());
+      this->eomTask_->b().head<6>() = tgtSupWrench;
+      this->eomTask_->b().tail(actRobotTqc->numJoints()) = tgtAccTau;
+      this->eomTask_->wa() = cnoid::VectorX::Ones(6+actRobotTqc->numJoints());
+
+      this->eomTask_->C() = Eigen::SparseMatrix<double,Eigen::RowMajor>(0,dim);
+      this->eomTask_->dl() = Eigen::VectorXd::Zero(0);
+      this->eomTask_->du() = Eigen::VectorXd::Ones(0);
+      this->eomTask_->wc() = cnoid::VectorX::Ones(0);
+
+      this->eomTask_->w() = cnoid::VectorX::Ones(dim) * 1e-6;
+      this->eomTask_->toSolve() = false;
+      this->eomTask_->settings().verbose = 0;
+
+      // std::cerr << "eomTask_->A()" << std::endl;
+      // std::cerr << this->eomTask_->A() << std::endl;
+      // std::cerr << "eomTask_->b()" << std::endl;
+      // std::cerr << this->eomTask_->b() << std::endl;
+    }
+
+    {
+      // 2. 接触力制約
+      // 0 <  0  0  1  0  0  0 < 1e10
+      // 0 <  1  0 mt  0  0  0 < 1e10
+      // 0 < -1  0 mt  0  0  0 < 1e10
+      // 0 <  0  1 mt  0  0  0 < 1e10
+      // 0 <  0 -1 mt  0  0  0 < 1e10
+      // 0 <  0  0  d r1 r2  0 < 1e10 ;; x legHull.size()
+      // 0 <  0  0 mr  0  0  1 < 1e10
+      // 0 <  0  0 mr  0  0 -1 < 1e10
+
+      this->wrenchConstraintTask_->A() = Eigen::SparseMatrix<double,Eigen::RowMajor>(0,dim);
+      this->wrenchConstraintTask_->b() = Eigen::VectorXd::Zero(0);
+      this->wrenchConstraintTask_->wa() = cnoid::VectorX::Ones(0);
+
+      int wrenchConstraintDim = 0;
+      for(int i=0;i<supportEE.size();i++) wrenchConstraintDim += 7+gaitParam.legHull[supportEE[i]].size();
+      this->wrenchConstraintTask_->C() = Eigen::SparseMatrix<double,Eigen::RowMajor>(wrenchConstraintDim,dim);
+      this->wrenchConstraintTask_->dl() = Eigen::VectorXd::Zero(wrenchConstraintDim);
+      this->wrenchConstraintTask_->du() = 1e10 * Eigen::VectorXd::Ones(wrenchConstraintDim);
+      this->wrenchConstraintTask_->wc() = cnoid::VectorX::Ones(wrenchConstraintDim);
+      for(int i=0, idx=0;i<supportEE.size();i++){
+        int leg = supportEE[i];
+        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = 1.0; this->wrenchConstraintTask_->dl()[idx] = 50.0; idx++;
+        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+0) = 1.0; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = gaitParam.muTrans[leg]; idx++;
+        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+0) = -1.0; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = gaitParam.muTrans[leg]; idx++;
+        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+1) = 1.0; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = gaitParam.muTrans[leg]; idx++;
+        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+1) = -1.0; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = gaitParam.muTrans[leg]; idx++;
+        for(int j=0;j<gaitParam.legHull[leg].size();j++){
+          cnoid::Vector3 v1 = gaitParam.legHull[leg][j] - gaitParam.copOffset[leg].value(); // EEF+copOffset frame/origin
+          cnoid::Vector3 v2 = gaitParam.legHull[leg][(j+1<gaitParam.legHull[leg].size())?j+1:0] - gaitParam.copOffset[leg].value(); // EEF+copOffset frame/origin
+          if(v1.head<2>() == v2.head<2>()) continue;
+          cnoid::Vector3 r = cnoid::Vector3(v2[1]-v1[1],v1[0]-v2[0],0).normalized();
+          double d = r.dot(v1);
+          this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = d; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+3) = -r[1]; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+4) = r[0]; idx++;
+        }
+        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+5) = 1.0; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = gaitParam.muRot[leg]; idx++;
+        this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+5) = -1.0; this->wrenchConstraintTask_->C().insert(idx,actRobotTqc->numJoints()+i*6+2) = gaitParam.muRot[leg]; idx++;
+      }
+
+      this->wrenchConstraintTask_->w() = cnoid::VectorX::Ones(dim) * 1e-6;
+      this->wrenchConstraintTask_->toSolve() = true;
+      this->wrenchConstraintTask_->settings().verbose = 0;
+
+      // std::cerr << "wrenchConstraintTask_->C()" << std::endl;
+      // std::cerr << this->wrenchConstraintTask_->C() << std::endl;
+    }
+
+    {
+      // 3. トルク上下限
+      this->torqueLimitTask_->A() = Eigen::SparseMatrix<double,Eigen::RowMajor>(0,dim);
+      this->torqueLimitTask_->b() = Eigen::VectorXd::Zero(0);
+      this->torqueLimitTask_->wa() = cnoid::VectorX::Ones(0);
+
+      this->torqueLimitTask_->C() = Eigen::SparseMatrix<double,Eigen::RowMajor>(actRobotTqc->numJoints(),dim);
+      this->torqueLimitTask_->dl() = Eigen::VectorXd::Zero(actRobotTqc->numJoints());
+      this->torqueLimitTask_->du() = Eigen::VectorXd::Zero(actRobotTqc->numJoints());
+      for(int i=0; i<actRobotTqc->numJoints();i++){
+	this->torqueLimitTask_->dl()[i] = - this->torque_limit[i];
+	this->torqueLimitTask_->du()[i] = this->torque_limit[i];
+      }
+      this->torqueLimitTask_->wc() = cnoid::VectorX::Ones(actRobotTqc->numJoints());
+
+      this->torqueLimitTask_->w() = cnoid::VectorX::Ones(dim) * 1e-6;
+      this->torqueLimitTask_->toSolve() = true;
+      this->torqueLimitTask_->settings().verbose = 0;
+    }
+
+    {
+      // 4. ノルムの2乗和の最小化
+      this->normTask_->A() = Eigen::SparseMatrix<double,Eigen::RowMajor>(0,dim);
+      this->normTask_->b() = Eigen::VectorXd::Zero(0);
+      this->normTask_->wa() = cnoid::VectorX::Ones(0);
+
+      this->normTask_->C() = Eigen::SparseMatrix<double,Eigen::RowMajor>(0,dim);
+      this->normTask_->dl() = Eigen::VectorXd::Zero(0);
+      this->normTask_->du() = Eigen::VectorXd::Ones(0);
+      this->normTask_->wc() = cnoid::VectorX::Ones(0);
+
+      this->normTask_->w() = cnoid::VectorX::Ones(dim);
+      for(int i=0;i<actRobotTqc->numJoints();i++){
+	this->normTask_->w()[i] = std::pow(1e0, 2.0);
+      }
+      for(int i=0;i<supportEE.size();i++){
+        this->normTask_->w()[actRobotTqc->numJoints()+i*6+0] = std::pow(1e2, 2.0);
+        this->normTask_->w()[actRobotTqc->numJoints()+i*6+1] = std::pow(1e2, 2.0);
+        this->normTask_->w()[actRobotTqc->numJoints()+i*6+2] = std::pow(1e0, 2.0);
+        this->normTask_->w()[actRobotTqc->numJoints()+i*6+3] = std::pow(1e2, 2.0);
+        this->normTask_->w()[actRobotTqc->numJoints()+i*6+4] = std::pow(1e2, 2.0);
+        this->normTask_->w()[actRobotTqc->numJoints()+i*6+5] = std::pow(1e3, 2.0);
+      }
+
+      this->normTask_->toSolve() = true;
+      this->normTask_->settings().check_termination = 5; // default 25. 高速化
+      this->normTask_->settings().verbose = 0;
+      
+    }
+
+    std::vector<std::shared_ptr<prioritized_qp_base::Task> > tasks{this->eomTask_,this->wrenchConstraintTask_,this->torqueLimitTask_,this->normTask_};
+    cnoid::VectorX result; // EEF+copOffset frame/origin
+    if(prioritized_qp_base::solve(tasks,
+                                   result,
+                                   0 // debuglevel
+                                   )){
+      for(int i=0;i<actRobotTqc->numJoints();i++) actRobotTqc->joint(i)->u() = result[i];
+      for(int i=0;i<supportEE.size();i++){
+        int leg = supportEE[i];
+        cnoid::Vector6 w = result.segment<6>(actRobotTqc->numJoints()+i*6); // EEF+copOffset frame/origin
+        tgtEEWrench[leg].head<3>() += gaitParam.actEEPose[leg].linear() * w.head<3>();
+        tgtEEWrench[leg].tail<3>() += gaitParam.actEEPose[leg].linear() * w.tail<3>();
+        tgtEEWrench[leg].tail<3>() += (gaitParam.actEEPose[leg].linear() * gaitParam.copOffset[leg].value()).cross(gaitParam.actEEPose[leg].linear() * w.head<3>());
+	// std::cerr << w << std::endl;
+      }
+    }else{
+      std::cerr << "false" << std::endl;
+    }
+  }
+
+  // std::cerr << "tau" << std::endl; 
+  // for(int i=0;i<actRobotTqc->numJoints();i++){
+  //   std::cerr << actRobotTqc->joint(i)->u() << " ";
+  // }
+  // std::cerr << std::endl;
+
+  o_tgtEEWrench = tgtEEWrench;
+  return true;
+}
