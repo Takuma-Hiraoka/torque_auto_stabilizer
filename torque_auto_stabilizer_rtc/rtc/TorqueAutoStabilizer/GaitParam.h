@@ -119,7 +119,7 @@ public:
     std::vector<std::vector<double> > stepHeight = std::vector<std::vector<double> >(NUM_LEGS,std::vector<double>(2,0)); // 要素数2. rleg: 0. lleg: 1. swing期には、srcCoordsの高さ+[0]とdstCoordsの高さ+[1]の高い方に上げるような軌道を生成する
     std::vector<bool> stopCurrentPosition = std::vector<bool>(NUM_LEGS, false); // 現在の位置で強制的に止めるかどうか
     std::vector<double> goalOffset = std::vector<double>(NUM_LEGS,0.0); // [m]. 遊脚軌道生成時に、遅づきの場合、generate frameで鉛直方向に, 目標着地位置に対して加えるオフセットの最大値. 0以下.
-    std::vector<double> touchVel = std::vector<double>(NUM_LEGS,0.3); // 0より大きい. 単位[m/s]. 足を下ろすときの速さ
+    std::vector<double> touchVel = std::vector<double>(NUM_LEGS,0.2); // 0より大きい. 単位[m/s]. 足を下ろすときの速さ
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };

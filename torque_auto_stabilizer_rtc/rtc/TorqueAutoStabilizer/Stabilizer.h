@@ -45,10 +45,10 @@ public:
     }
     for(int i=0;i<NUM_LEGS;i++){
       ee_swing_K.push_back((cnoid::Vector6() << 200, 200, 200, 100, 100, 100).finished());
-      ee_swing_D.push_back((cnoid::Vector6() << 30, 30, 30, 20, 20, 20).finished());
-      ee_landing_K.push_back((cnoid::Vector6() << 200, 200, 20, 100, 100, 100).finished());
-      ee_landing_D.push_back((cnoid::Vector6() << 30, 30, 5, 20, 20, 20).finished());
-      ee_support_D.push_back((cnoid::Vector6() << 30, 30, 50, 20, 20, 20).finished());
+      ee_swing_D.push_back((cnoid::Vector6() << 30, 30, 30, 30, 30, 30).finished());
+      ee_landing_K.push_back((cnoid::Vector6() << 200, 200, 20, 50, 50, 50).finished());
+      ee_landing_D.push_back((cnoid::Vector6() << 30, 30, 5, 30, 30, 30).finished());
+      ee_support_D.push_back((cnoid::Vector6() << 30, 30, 50, 50, 30, 30).finished());
     }
 
     aikdqWeight.resize(actRobotTqc->numJoints(), cpp_filters::TwoPointInterpolator<double>(1.0, 0.0, 0.0, cpp_filters::HOFFARBIB));
