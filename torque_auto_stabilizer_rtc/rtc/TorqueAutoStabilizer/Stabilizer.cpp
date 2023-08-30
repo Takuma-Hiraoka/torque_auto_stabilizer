@@ -359,21 +359,42 @@ bool Stabilizer::calcTorque(const GaitParam& gaitParam, cnoid::BodyPtr& actRobot
 	cnoid::MatrixXd J = cnoid::MatrixXd::Zero(6,jointPath.numJoints()); // generate frame.
 	cnoid::setJacobian<0x3f,0,0,true>(jointPath,actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]]),gaitParam.eeLocalT[supportEE[i]].translation(), // input
 					      J); // output
+        cnoid::MatrixXd bJ = cnoid::MatrixXd::Identity(6,6);
+        cnoid::Vector3 dp = (actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]])->T() * gaitParam.eeLocalT[supportEE[i]]).translation() - actRobotTqc->rootLink()->p();
+        bJ(0,4) =  dp[2];
+        bJ(0,5) = -dp[1];
+        bJ(1,3) = -dp[2];
+        bJ(1,5) =  dp[0];
+        bJ(2,3) =  dp[1];
+        bJ(2,4) = -dp[0];
+        cnoid::MatrixXd JT = J.transpose();
+        cnoid::MatrixXd bJT = bJ.transpose();
+        std::cerr << bJT << std::endl;
+        for (int j=0;j<jointPath.numJoints();j++) {
+          for (int k=0;k<6;k++) {
+            eomTripletList_A.push_back(Eigen::Triplet<double>(6+jointPath.joint(j)->jointId(), actRobotTqc->numJoints()+6*i+k, JT(j,k)));
+          }
+        }
+        for (int j=0;j<6;j++) {
+          for (int k=0;k<6;k++) {
+            eomTripletList_A.push_back(Eigen::Triplet<double>(j, actRobotTqc->numJoints()+6*i+k, bJT(j,k)));
+          }
+        }
 	// 該当する箇所に代入. 転置に注意
-	for (int j=0;j<jointPath.numJoints();j++) {
-	  for(int k=0;k<6;k++){
-	    eomTripletList_A.push_back(Eigen::Triplet<double>(6+jointPath.joint(j)->jointId(), actRobotTqc->numJoints()+6*i+k,J(k,j)));
-	  }
-	}
+	// for (int j=0;j<jointPath.numJoints();j++) {
+	//   for(int k=0;k<6;k++){
+	//     eomTripletList_A.push_back(Eigen::Triplet<double>(6+jointPath.joint(j)->jointId(), actRobotTqc->numJoints()+6*i+k,J(k,j)));
+	//   }
+	// }
 
-	for(int j=0;j<6;j++) eomTripletList_A.push_back(Eigen::Triplet<double>(j,actRobotTqc->numJoints()+ 6*i + j,1.0));
-	cnoid::Vector3 dp = (actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]])->T() * gaitParam.eeLocalT[supportEE[i]]).translation() - actRobotTqc->rootLink()->p();
-	eomTripletList_A.push_back(Eigen::Triplet<double>(4,actRobotTqc->numJoints() + 0 + 6*i, dp[2]));
-	eomTripletList_A.push_back(Eigen::Triplet<double>(5,actRobotTqc->numJoints() + 0 + 6*i,-dp[1]));
-	eomTripletList_A.push_back(Eigen::Triplet<double>(3,actRobotTqc->numJoints() + 1 + 6*i,-dp[2]));
-	eomTripletList_A.push_back(Eigen::Triplet<double>(5,actRobotTqc->numJoints() + 1 + 6*i, dp[0]));
-	eomTripletList_A.push_back(Eigen::Triplet<double>(3,actRobotTqc->numJoints() + 2 + 6*i, dp[1]));
-	eomTripletList_A.push_back(Eigen::Triplet<double>(4,actRobotTqc->numJoints() + 2 + 6*i,-dp[0]));
+	// for(int j=0;j<6;j++) eomTripletList_A.push_back(Eigen::Triplet<double>(j,actRobotTqc->numJoints()+ 6*i + j,1.0));
+	// cnoid::Vector3 dp = (actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]])->T() * gaitParam.eeLocalT[supportEE[i]]).translation() - actRobotTqc->rootLink()->p();
+	// eomTripletList_A.push_back(Eigen::Triplet<double>(4,actRobotTqc->numJoints() + 0 + 6*i, dp[2]));
+	// eomTripletList_A.push_back(Eigen::Triplet<double>(5,actRobotTqc->numJoints() + 0 + 6*i,-dp[1]));
+	// eomTripletList_A.push_back(Eigen::Triplet<double>(3,actRobotTqc->numJoints() + 1 + 6*i,-dp[2]));
+	// eomTripletList_A.push_back(Eigen::Triplet<double>(5,actRobotTqc->numJoints() + 1 + 6*i, dp[0]));
+	// eomTripletList_A.push_back(Eigen::Triplet<double>(3,actRobotTqc->numJoints() + 2 + 6*i, dp[1]));
+	// eomTripletList_A.push_back(Eigen::Triplet<double>(4,actRobotTqc->numJoints() + 2 + 6*i,-dp[0]));
       }
       this->eomTask_->A().setFromTriplets(eomTripletList_A.begin(), eomTripletList_A.end());
       this->eomTask_->b() = Eigen::VectorXd::Zero(6+actRobotTqc->numJoints());
