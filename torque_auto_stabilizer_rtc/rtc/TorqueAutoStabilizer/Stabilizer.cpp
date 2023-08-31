@@ -355,12 +355,13 @@ bool Stabilizer::calcTorque(const GaitParam& gaitParam, cnoid::BodyPtr& actRobot
 
       // J^T W
       for (int i=0;i<supportEE.size();i++){
-	cnoid::JointPath jointPath(actRobotTqc->rootLink(), actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]]));
+	int leg = supportEE[i];
+	cnoid::JointPath jointPath(actRobotTqc->rootLink(), actRobotTqc->link(gaitParam.eeParentLink[leg]));
 	cnoid::MatrixXd J = cnoid::MatrixXd::Zero(6,jointPath.numJoints()); // generate frame.
-	cnoid::setJacobian<0x3f,0,0,true>(jointPath,actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]]),gaitParam.eeLocalT[supportEE[i]].translation(), // input
+	cnoid::setJacobian<0x3f,0,0,true>(jointPath,actRobotTqc->link(gaitParam.eeParentLink[leg]),gaitParam.eeLocalT[leg].translation(), // input
 					      J); // output
         cnoid::MatrixXd bJ = cnoid::MatrixXd::Identity(6,6);
-        cnoid::Vector3 dp = (actRobotTqc->link(gaitParam.eeParentLink[supportEE[i]])->T() * gaitParam.eeLocalT[supportEE[i]]).translation() - actRobotTqc->rootLink()->p();
+        cnoid::Vector3 dp = (actRobotTqc->link(gaitParam.eeParentLink[leg])->T() * gaitParam.eeLocalT[leg]).translation() - actRobotTqc->rootLink()->p();
         bJ(0,4) =  dp[2];
         bJ(0,5) = -dp[1];
         bJ(1,3) = -dp[2];
@@ -369,7 +370,19 @@ bool Stabilizer::calcTorque(const GaitParam& gaitParam, cnoid::BodyPtr& actRobot
         bJ(2,4) = -dp[0];
         cnoid::MatrixXd JT = J.transpose();
         cnoid::MatrixXd bJT = bJ.transpose();
-        std::cerr << bJT << std::endl;
+
+	cnoid::Position eePose = gaitParam.actEEPose[leg];
+	eePose.translation() += eePose.linear() * gaitParam.copOffset[leg].value();
+	cnoid::Matrix3 eeR = eePose.linear();
+	cnoid::Matrix3 eepCross = mathutil::cross(eePose.translation() - actRobotTqc->centerOfMass()) * eeR;
+	cnoid::MatrixXd rotation = cnoid::MatrixXd::Zero(6,6);
+	rotation.topLeftCorner(3,3) = eeR;
+	rotation.bottomLeftCorner(3,3) = eepCross;
+	rotation.bottomRightCorner(3,3) = eeR;
+
+	// JT = JT * rotation;
+	// bJT = bJT * rotation;
+	
         for (int j=0;j<jointPath.numJoints();j++) {
           for (int k=0;k<6;k++) {
             eomTripletList_A.push_back(Eigen::Triplet<double>(6+jointPath.joint(j)->jointId(), actRobotTqc->numJoints()+6*i+k, JT(j,k)));
